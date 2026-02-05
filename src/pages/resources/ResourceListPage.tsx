@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,54 +16,119 @@ import {
   Search,
   Filter,
   CalendarPlus,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  Image as ImageIcon,
 } from 'lucide-react';
-import { mockResources } from '@/data/mockData';
+import { resourcesAPI, mediaAPI } from '@/lib/api';
 import { ResourceType } from '@/types/reservation';
+import { useToast } from '@/hooks/use-toast';
+import { getImageUrl } from '@/lib/utils';
 
 const resourceTypeConfig: Record<ResourceType, { title: string; icon: React.ElementType; description: string }> = {
-  room: {
-    title: 'Salles',
-    icon: Building2,
-    description: 'Salles de réunion, conférence et formation',
-  },
-  field: {
-    title: 'Terrains',
+  terrain: {
+    title: 'Terrains de sport',
     icon: TreePine,
-    description: 'Terrains de sport et espaces extérieurs',
+    description: 'Terrains de tennis, basketball, football, etc.',
+  },
+  salle: {
+    title: 'Salles de sport',
+    icon: Building2,
+    description: 'Salles de sport, fitness, yoga, etc.',
   },
   equipment: {
-    title: 'Matériel',
+    title: 'Équipements',
     icon: Package,
-    description: 'Équipements et matériel disponible à la location',
+    description: 'Équipements sportifs à louer (raquettes, ballons, etc.)',
   },
 };
 
 export const ResourceListPage: React.FC = () => {
   const { type } = useParams<{ type: string }>();
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [capacityFilter, setCapacityFilter] = useState<string>('all');
   const [priceSort, setPriceSort] = useState<string>('default');
+  const [resources, setResources] = useState<any[]>([]);
+  const [resourceImages, setResourceImages] = useState<Record<string, string[]>>({});
+  const [selectedImageIndex, setSelectedImageIndex] = useState<Record<string, number>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
-  const resourceType = (type === 'rooms' ? 'room' : type === 'fields' ? 'field' : 'equipment') as ResourceType;
-  const config = resourceTypeConfig[resourceType];
-  const Icon = config.icon;
+  const resourceType = useMemo(() => {
+    return (type === 'terrains' ? 'terrain' : type === 'salles' ? 'salle' : 'equipment') as ResourceType;
+  }, [type]);
+  
+  const config = resourceType ? resourceTypeConfig[resourceType] : resourceTypeConfig.terrain;
+  const Icon = config?.icon || TreePine;
+
+  useEffect(() => {
+    const loadResources = async () => {
+      try {
+        setIsLoading(true);
+        const response = await resourcesAPI.getAll({
+          type: resourceType,
+          status: 'active',
+          page: 1,
+          limit: 1000,
+        });
+        const resourcesList = response.resources || [];
+        setResources(resourcesList);
+        
+        // Load ALL images for each resource
+        const imagesMap: Record<string, string[]> = {};
+        const indexMap: Record<string, number> = {};
+        await Promise.all(
+          resourcesList.map(async (resource: any) => {
+            try {
+              const mediaRes = await mediaAPI.getByResource(resource._id || resource.id, { mediaType: 'image' });
+              const images = (mediaRes.mediaAssets || [])
+                .map((media: any) => getImageUrl(media.originalUrl))
+                .filter((url: string) => url !== '/placeholder.svg');
+              if (images.length > 0) {
+                imagesMap[resource._id || resource.id] = images;
+                indexMap[resource._id || resource.id] = 0;
+              }
+            } catch (error) {
+              // Ignore errors for individual images
+            }
+          })
+        );
+        setResourceImages(imagesMap);
+        setSelectedImageIndex(indexMap);
+      } catch (error: any) {
+        console.error('Error loading resources:', error);
+        toast({
+          title: 'Erreur',
+          description: 'Impossible de charger les ressources.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (resourceType) {
+      loadResources();
+    }
+  }, [resourceType, toast]);
 
   const filteredResources = useMemo(() => {
-    let resources = mockResources.filter(r => r.type === resourceType && r.isActive);
+    let filtered = resources.filter((r: any) => r.status === 'active');
 
     // Search filter
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      resources = resources.filter(r => 
-        r.name.toLowerCase().includes(query) || 
-        r.description.toLowerCase().includes(query)
+      filtered = filtered.filter((r: any) => 
+        r.name?.toLowerCase().includes(query) || 
+        r.description?.toLowerCase().includes(query)
       );
     }
 
     // Capacity filter
     if (capacityFilter !== 'all') {
       const [min, max] = capacityFilter.split('-').map(Number);
-      resources = resources.filter(r => {
+      filtered = filtered.filter((r: any) => {
         const capacity = r.capacity || 0;
         if (max) {
           return capacity >= min && capacity <= max;
@@ -74,13 +139,13 @@ export const ResourceListPage: React.FC = () => {
 
     // Price sort
     if (priceSort === 'low') {
-      resources.sort((a, b) => a.pricePerHour - b.pricePerHour);
+      filtered.sort((a: any, b: any) => (a.pricePerUnit || 0) - (b.pricePerUnit || 0));
     } else if (priceSort === 'high') {
-      resources.sort((a, b) => b.pricePerHour - a.pricePerHour);
+      filtered.sort((a: any, b: any) => (b.pricePerUnit || 0) - (a.pricePerUnit || 0));
     }
 
-    return resources;
-  }, [resourceType, searchQuery, capacityFilter, priceSort]);
+    return filtered;
+  }, [resources, searchQuery, capacityFilter, priceSort]);
 
   return (
     <AppLayout>
@@ -138,7 +203,11 @@ export const ResourceListPage: React.FC = () => {
         </div>
 
         {/* Resources grid */}
-        {filteredResources.length === 0 ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : filteredResources.length === 0 ? (
           <Card className="text-center py-12">
             <CardContent>
               <Icon className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -150,31 +219,119 @@ export const ResourceListPage: React.FC = () => {
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredResources.map((resource) => (
-              <Card key={resource.id} className="flex flex-col">
+            {filteredResources.map((resource: any) => (
+              <div
+                key={resource._id || resource.id}
+                onClick={() => window.location.href = `/resources/${type}/${resource._id || resource.id}`}
+                className="block cursor-pointer"
+              >
+              <Card className="flex flex-col hover:shadow-lg transition-shadow">
                 <CardHeader className="pb-3">
-                  <div className="aspect-video rounded-lg bg-muted mb-3 overflow-hidden">
-                    <img
-                      src={resource.images[0] || '/placeholder.svg'}
-                      alt={resource.name}
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="relative aspect-video rounded-lg bg-muted mb-3 overflow-hidden group">
+                    {(() => {
+                      const resourceId = resource._id || resource.id;
+                      const images = resourceImages[resourceId] || [];
+                      const currentIndex = selectedImageIndex[resourceId] || 0;
+                      const currentImage = images[currentIndex] || '/placeholder.svg';
+                      
+                      return (
+                        <>
+                          <img
+                            src={currentImage}
+                            alt={resource.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/placeholder.svg';
+                            }}
+                          />
+                          {/* Navigation arrows if multiple images */}
+                          {images.length > 1 && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const newIndex = currentIndex > 0 ? currentIndex - 1 : images.length - 1;
+                                  setSelectedImageIndex(prev => ({ ...prev, [resourceId]: newIndex }));
+                                }}
+                              >
+                                <ChevronLeft className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const newIndex = currentIndex < images.length - 1 ? currentIndex + 1 : 0;
+                                  setSelectedImageIndex(prev => ({ ...prev, [resourceId]: newIndex }));
+                                }}
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </Button>
+                              {/* Image counter */}
+                              <div className="absolute bottom-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                                {currentIndex + 1} / {images.length}
+                              </div>
+                              {/* Thumbnail strip */}
+                              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="flex gap-1 overflow-x-auto scrollbar-thin scrollbar-thumb-white/50 scrollbar-track-transparent">
+                                  {images.map((img: string, idx: number) => (
+                                    <button
+                                      key={idx}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setSelectedImageIndex(prev => ({ ...prev, [resourceId]: idx }));
+                                      }}
+                                      className={`flex-shrink-0 w-12 h-12 rounded overflow-hidden border-2 transition-all ${
+                                        idx === currentIndex ? 'border-white' : 'border-transparent opacity-60 hover:opacity-100'
+                                      }`}
+                                    >
+                                      <img
+                                        src={img}
+                                        alt={`${resource.name} ${idx + 1}`}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          (e.target as HTMLImageElement).src = '/placeholder.svg';
+                                        }}
+                                      />
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                          {/* Image count badge */}
+                          {images.length > 1 && (
+                            <div className="absolute top-2 right-2 bg-black/50 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                              <ImageIcon className="h-3 w-3" />
+                              {images.length}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                   <CardTitle className="text-lg">{resource.name}</CardTitle>
                   <CardDescription className="line-clamp-2">
-                    {resource.description}
+                    {resource.description || resource.shortDescription}
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex-1">
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {resource.equipment.slice(0, 3).map((eq, i) => (
+                    {resource.features?.slice(0, 3).map((feat: string, i: number) => (
                       <Badge key={i} variant="secondary" className="text-xs">
-                        {eq}
+                        {feat}
                       </Badge>
                     ))}
-                    {resource.equipment.length > 3 && (
+                    {resource.features?.length > 3 && (
                       <Badge variant="outline" className="text-xs">
-                        +{resource.equipment.length - 3}
+                        +{resource.features.length - 3}
                       </Badge>
                     )}
                   </div>
@@ -182,33 +339,47 @@ export const ResourceListPage: React.FC = () => {
                     {resource.capacity && (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Users className="h-4 w-4" />
-                        <span>{resource.capacity} pers.</span>
+                        <span>
+                          {resource.capacity} {
+                            resource.type === 'terrain' ? 'joueurs' :
+                            resource.type === 'salle' ? 'pers.' :
+                            resource.unit === 'players' ? 'joueurs' :
+                            resource.unit === 'persons' ? 'pers.' :
+                            resource.unit === 'items' ? 'articles' :
+                            resource.unit === 'square_meters' ? 'm²' : ''
+                          }
+                        </span>
                       </div>
                     )}
-                    <div className="flex items-center gap-2 text-muted-foreground">
-                      <Clock className="h-4 w-4" />
-                      <span>Min. {resource.minDuration}min</span>
-                    </div>
+                    {resource.minBookingHours && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        <span>Min. {resource.minBookingHours}h</span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2 font-medium col-span-2">
                       <Euro className="h-4 w-4" />
-                      <span>{resource.pricePerHour}€/heure</span>
+                      <span>{resource.pricePerUnit}€/{resource.pricingModel === 'hourly' ? 'heure' : resource.pricingModel}</span>
                     </div>
                   </div>
                 </CardContent>
                 <CardFooter className="pt-0 gap-2">
-                  <Button variant="outline" className="flex-1" asChild>
-                    <Link to={`/resources/${type}/${resource.id}`}>
-                      Détails
-                    </Link>
+                  <Button variant="outline" className="flex-1" onClick={(e) => {
+                    e.stopPropagation();
+                    window.location.href = `/resources/${type}/${resource._id || resource.id}`;
+                  }}>
+                    Détails
                   </Button>
-                  <Button className="flex-1" asChild>
-                    <Link to={`/reservations/new?resource=${resource.id}`}>
-                      <CalendarPlus className="h-4 w-4 mr-2" />
-                      Réserver
-                    </Link>
+                  <Button className="flex-1" onClick={(e) => {
+                    e.stopPropagation();
+                    window.location.href = `/reservations/new?resource=${resource._id || resource.id}`;
+                  }}>
+                    <CalendarPlus className="h-4 w-4 mr-2" />
+                    Réserver
                   </Button>
                 </CardFooter>
               </Card>
+            </div>
             ))}
           </div>
         )}

@@ -1,4 +1,4 @@
-export type UserRole = 'user' | 'manager' | 'admin';
+export type UserRole = 'user' | 'admin';
 
 export interface User {
   id: string;
@@ -7,10 +7,11 @@ export interface User {
   lastName: string;
   role: UserRole;
   avatar?: string;
+  avatarUrl?: string;
   createdAt: Date;
 }
 
-export type ResourceType = 'room' | 'field' | 'equipment';
+export type ResourceType = 'terrain' | 'salle' | 'equipment';
 
 export interface Resource {
   id: string;

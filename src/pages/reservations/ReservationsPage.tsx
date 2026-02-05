@@ -1,21 +1,50 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Building2, TreePine, Package, CalendarPlus, X } from 'lucide-react';
-import { mockReservations, getResourceById } from '@/data/mockData';
+import { Calendar, Building2, TreePine, Package, CalendarPlus, X, Loader2, Printer, Edit2, CreditCard, ArrowRight } from 'lucide-react';
+import { bookingsAPI } from '@/lib/api';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { ReservationTicket } from '@/components/reservations/ReservationTicket';
 
 export const ReservationsPage: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [reservations, setReservations] = useState(mockReservations.filter(r => r.userId === user?.id));
+  const navigate = useNavigate();
+  const [reservations, setReservations] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedReservation, setSelectedReservation] = useState<any>(null);
+  const [isTicketOpen, setIsTicketOpen] = useState(false);
+
+  useEffect(() => {
+    const loadReservations = async () => {
+      try {
+        setIsLoading(true);
+        // Fetch only current user's reservations - backend filters by req.user._id
+        const response = await bookingsAPI.getAll({ page: 1, limit: 100 });
+        setReservations(response.reservations || []);
+      } catch (error: any) {
+        console.error('Error loading reservations:', error);
+        toast({
+          title: 'Erreur',
+          description: 'Impossible de charger les réservations.',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (user) {
+      loadReservations();
+    }
+  }, [user, toast]);
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -37,43 +66,131 @@ export const ReservationsPage: React.FC = () => {
     }
   };
 
-  const handleCancel = (id: string) => {
-    setReservations(prev => prev.map(r => r.id === id ? { ...r, status: 'cancelled' as const } : r));
-    toast({ title: 'Réservation annulée', description: 'Votre réservation a été annulée.' });
+  const handleCancel = async (id: string) => {
+    try {
+      await bookingsAPI.cancel(id);
+      setReservations(prev => prev.map((r: any) => 
+        (r._id === id || r.id === id) ? { ...r, status: 'cancelled' } : r
+      ));
+      toast({ title: 'Réservation annulée', description: 'Votre réservation a été annulée.' });
+    } catch (error: any) {
+      toast({
+        title: 'Erreur',
+        description: error.message || 'Impossible d\'annuler la réservation.',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const upcoming = reservations.filter(r => new Date(r.startTime) > new Date() && r.status !== 'cancelled');
-  const past = reservations.filter(r => new Date(r.startTime) <= new Date() || r.status === 'cancelled');
+  const upcoming = reservations.filter((r: any) => {
+    const startTime = new Date(r.startTime);
+    return startTime > new Date() && !['cancelled', 'completed'].includes(r.status);
+  });
+  const past = reservations.filter((r: any) => {
+    const startTime = new Date(r.startTime);
+    return startTime <= new Date() || ['cancelled', 'completed'].includes(r.status);
+  });
 
-  const ReservationCard = ({ reservation }: { reservation: typeof reservations[0] }) => {
-    const resource = getResourceById(reservation.resourceId);
+  const handlePrintTicket = (reservation: any) => {
+    setSelectedReservation(reservation);
+    setIsTicketOpen(true);
+  };
+
+  const handleModifyReservation = (reservationId: string) => {
+    navigate(`/reservations/review?reservationId=${reservationId}&edit=true`);
+  };
+
+  const handleCheckout = (reservationId: string) => {
+    navigate(`/reservations/checkout?reservationId=${reservationId}`);
+  };
+
+  const ReservationCard = ({ reservation }: { reservation: any }) => {
+    const resource = reservation.resourceId;
+    const resourceType = typeof resource === 'object' ? resource?.type : 'room';
+    const resourceName = typeof resource === 'object' ? resource?.name : 'Ressource';
+    
+    const isPending = reservation.status === 'pending';
+    const isPaid = reservation.status === 'paid';
+    const isConfirmed = reservation.status === 'confirmed';
+    const isActive = reservation.status === 'active';
+    const isPast = new Date(reservation.startTime) <= new Date();
+    
     return (
-      <Card>
-        <CardContent className="p-4">
+      <Card className="hover:shadow-lg transition-all duration-300 border-l-4" 
+            style={{
+              borderLeftColor: isPending ? '#f97316' : isPaid ? '#22c55e' : isConfirmed ? '#3b82f6' : '#6b7280'
+            }}>
+        <CardContent className="p-5">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              {resource && getResourceIcon(resource.type)}
+            <div className={`flex h-12 w-12 items-center justify-center rounded-lg text-white font-semibold ${
+              isPending ? 'bg-orange-500' :
+              isPaid ? 'bg-green-500' :
+              isConfirmed ? 'bg-blue-500' :
+              'bg-gray-500'
+            }`}>
+              {getResourceIcon(resourceType)}
             </div>
             <div className="flex-1">
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between mb-2">
                 <div>
-                  <h3 className="font-medium">{resource?.name}</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="font-semibold text-lg">{resourceName}</h3>
+                  <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                    <Calendar className="h-4 w-4" />
                     {format(new Date(reservation.startTime), "EEEE d MMMM yyyy", { locale: fr })}
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <span className="font-mono">🕐</span>
                     {format(new Date(reservation.startTime), "HH:mm")} - {format(new Date(reservation.endTime), "HH:mm")}
                   </p>
                 </div>
-                {getStatusBadge(reservation.status)}
+                <Badge variant={isPending ? 'secondary' : isPaid ? 'default' : 'outline'} className="ml-2">
+                  {isPending ? '⏳ En attente' :
+                   isPaid ? '✓ Payé' :
+                   isConfirmed ? '✓ Confirmé' :
+                   isActive ? '▶ Actif' :
+                   '✓ Terminé'}
+                </Badge>
               </div>
-              <div className="mt-3 flex items-center justify-between">
-                <span className="font-medium">{reservation.totalPrice}€</span>
-                {reservation.status === 'confirmed' && new Date(reservation.startTime) > new Date() && (
-                  <Button variant="outline" size="sm" onClick={() => handleCancel(reservation.id)}>
-                    <X className="h-4 w-4 mr-1" /> Annuler
-                  </Button>
-                )}
+              <div className="mt-4 flex items-center justify-between flex-wrap gap-3">
+                <span className="text-lg font-bold text-primary">{reservation.totalAmount} DH</span>
+                <div className="flex gap-2 flex-wrap justify-end">
+                  {['confirmed', 'paid', 'active'].includes(reservation.status) && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handlePrintTicket(reservation)}
+                      className="hover:bg-blue-50"
+                    >
+                      <Printer className="h-4 w-4 mr-1" /> Ticket
+                    </Button>
+                  )}
+                  {reservation.status === 'pending' && (
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      onClick={() => handleCheckout(reservation._id || reservation.id)}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      <CreditCard className="h-4 w-4 mr-1" /> Payer
+                    </Button>
+                  )}
+                  {['pending', 'confirmed'].includes(reservation.status) && !isPast && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleModifyReservation(reservation._id || reservation.id)}
+                      className="hover:bg-amber-50"
+                    >
+                      <Edit2 className="h-4 w-4 mr-1" /> Modifier
+                    </Button>
+                  )}
+                  {['confirmed', 'paid'].includes(reservation.status) && !isPast && (
+                    <Button variant="ghost" size="sm" onClick={() => handleCancel(reservation._id || reservation.id)}
+                            className="hover:bg-red-50 text-red-600">
+                      <X className="h-4 w-4 mr-1" /> Annuler
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -82,22 +199,80 @@ export const ReservationsPage: React.FC = () => {
     );
   };
 
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Mes réservations</h1>
-          <Button asChild><Link to="/reservations/new"><CalendarPlus className="h-4 w-4 mr-2" />Nouvelle</Link></Button>
+          <div>
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Mes réservations</h1>
+            <p className="text-muted-foreground mt-1">Gérez vos réservations et effectuez vos paiements</p>
+          </div>
+          <Button asChild className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-lg">
+            <Link to="/reservations/new">
+              <CalendarPlus className="h-4 w-4 mr-2" />
+              Nouvelle réservation
+            </Link>
+          </Button>
         </div>
-        <Tabs defaultValue="upcoming">
-          <TabsList><TabsTrigger value="upcoming">À venir ({upcoming.length})</TabsTrigger><TabsTrigger value="past">Historique ({past.length})</TabsTrigger></TabsList>
-          <TabsContent value="upcoming" className="space-y-4 mt-4">
-            {upcoming.length === 0 ? <Card className="text-center py-8"><CardContent><p className="text-muted-foreground">Aucune réservation à venir</p></CardContent></Card> : upcoming.map(r => <ReservationCard key={r.id} reservation={r} />)}
+        <Tabs defaultValue="upcoming" className="w-full">
+          <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsTrigger value="upcoming" className="gap-2">
+              <span>📅</span> À venir ({upcoming.length})
+            </TabsTrigger>
+            <TabsTrigger value="past" className="gap-2">
+              <span>📋</span> Historique ({past.length})
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="upcoming" className="space-y-4 mt-6">
+            {upcoming.length === 0 ? (
+              <Card className="border-dashed border-2">
+                <CardContent className="p-8 text-center">
+                  <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                  <p className="text-muted-foreground">Aucune réservation à venir</p>
+                  <Button asChild className="mt-4" variant="outline">
+                    <Link to="/reservations/new">Créer une réservation</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              upcoming.map((r: any) => <ReservationCard key={r._id || r.id} reservation={r} />)
+            )}
           </TabsContent>
-          <TabsContent value="past" className="space-y-4 mt-4">
-            {past.length === 0 ? <Card className="text-center py-8"><CardContent><p className="text-muted-foreground">Aucun historique</p></CardContent></Card> : past.map(r => <ReservationCard key={r.id} reservation={r} />)}
+          <TabsContent value="past" className="space-y-4 mt-6">
+            {past.length === 0 ? (
+              <Card className="border-dashed border-2">
+                <CardContent className="p-8 text-center">
+                  <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+                  <p className="text-muted-foreground">Aucun historique</p>
+                </CardContent>
+              </Card>
+            ) : (
+              past.map((r: any) => <ReservationCard key={r._id || r.id} reservation={r} />)
+            )}
           </TabsContent>
         </Tabs>
+
+        {/* Ticket Dialog */}
+        {selectedReservation && (
+          <ReservationTicket
+            reservation={selectedReservation}
+            isOpen={isTicketOpen}
+            onClose={() => {
+              setIsTicketOpen(false);
+              setSelectedReservation(null);
+            }}
+          />
+        )}
       </div>
     </AppLayout>
   );

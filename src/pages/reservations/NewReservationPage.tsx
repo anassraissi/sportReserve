@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ArrowLeft, CalendarIcon, Clock, Loader2 } from 'lucide-react';
-import { mockResources } from '@/data/mockData';
+import { resourcesAPI, bookingsAPI } from '@/lib/api';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -20,21 +20,119 @@ export const NewReservationPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [resources, setResources] = useState<any[]>([]);
   const [resourceId, setResourceId] = useState(searchParams.get('resource') || '');
   const [date, setDate] = useState<Date>();
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [notes, setNotes] = useState('');
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
+  const [reservedHours, setReservedHours] = useState<number[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(searchParams.get('edit'));
 
-  const resource = mockResources.find(r => r.id === resourceId);
-  const hours = Array.from({ length: 13 }, (_, i) => `${(8 + i).toString().padStart(2, '0')}:00`);
+  useEffect(() => {
+    const loadResources = async () => {
+      try {
+        const response = await resourcesAPI.getAll({ status: 'active', page: 1, limit: 1000 });
+        setResources(response.resources || []);
+      } catch (error: any) {
+        toast({
+          title: 'Erreur',
+          description: 'Impossible de charger les ressources.',
+          variant: 'destructive',
+        });
+      }
+    };
+    
+    const loadEditingReservation = async () => {
+      if (!editingId) return;
+      try {
+        const response = await bookingsAPI.getById(editingId);
+        const reservation = response.reservation;
+        setResourceId(reservation.resourceId._id || reservation.resourceId.id || '');
+        setDate(new Date(reservation.startTime));
+        setStartTime(format(new Date(reservation.startTime), 'HH:mm'));
+        setEndTime(format(new Date(reservation.endTime), 'HH:mm'));
+        setNotes(reservation.description || '');
+      } catch (error: any) {
+        toast({
+          title: 'Erreur',
+          description: 'Impossible de charger la réservation.',
+          variant: 'destructive',
+        });
+      }
+    };
+    
+    loadResources();
+    loadEditingReservation();
+  }, [toast, editingId]);
+
+  // Fetch reserved hours when date changes
+  const handleDateSelect = async (selectedDate: Date | undefined) => {
+    setDate(selectedDate);
+    
+    // Set default times: next hour for start, same as start for end
+    if (selectedDate) {
+      const now = new Date();
+      const isToday = selectedDate.toDateString() === now.toDateString();
+      
+      if (isToday) {
+        const nextHour = new Date(now);
+        nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
+        const startTimeStr = `${nextHour.getHours().toString().padStart(2, '0')}:00`;
+        setStartTime(startTimeStr);
+        setEndTime(startTimeStr);
+      } else {
+        // For future dates, default to 08:00 - 08:00
+        setStartTime('08:00');
+        setEndTime('08:00');
+      }
+    } else {
+      setStartTime('');
+      setEndTime('');
+    }
+    
+    setReservedHours([]);
+
+    if (!selectedDate || !resourceId) return;
+
+    try {
+      const dayStart = new Date(selectedDate);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(selectedDate);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const response = await bookingsAPI.checkAvailability(
+        resourceId,
+        dayStart.toISOString(),
+        dayEnd.toISOString()
+      );
+
+      if (response.conflictingReservations && response.conflictingReservations.length > 0) {
+        const reserved = response.conflictingReservations.map((reservation: any) => {
+          const startHour = new Date(reservation.startTime).getHours();
+          return startHour;
+        });
+        setReservedHours([...new Set(reserved)]);
+      }
+    } catch (error: any) {
+      console.error('Error checking availability:', error);
+    }
+  };
+
+  const resource = resources.find((r: any) => (r._id || r.id) === resourceId);
+  const hours = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
 
   const calculatePrice = () => {
-    if (!resource || !startTime || !endTime) return 0;
+    if (!resource || !startTime || !endTime || !date) return 0;
     const [sh, sm] = startTime.split(':').map(Number);
     const [eh, em] = endTime.split(':').map(Number);
-    const duration = (eh * 60 + em) - (sh * 60 + sm);
-    return Math.round((duration / 60) * resource.pricePerHour);
+    const start = new Date(date);
+    start.setHours(sh, sm, 0, 0);
+    const end = new Date(date);
+    end.setHours(eh, em, 0, 0);
+    const duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+    return Math.round(duration * (resource.pricePerUnit || 0));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,10 +141,75 @@ export const NewReservationPage: React.FC = () => {
       toast({ title: 'Erreur', description: 'Veuillez remplir tous les champs.', variant: 'destructive' });
       return;
     }
-    setIsLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
-    toast({ title: 'Réservation créée', description: 'Votre réservation a été enregistrée.' });
-    navigate('/reservations');
+
+    try {
+      setIsLoading(true);
+      
+      // Combine date and time
+      const [sh, sm] = startTime.split(':').map(Number);
+      const [eh, em] = endTime.split(':').map(Number);
+      const startDateTime = new Date(date);
+      startDateTime.setHours(sh, sm, 0, 0);
+      const endDateTime = new Date(date);
+      endDateTime.setHours(eh, em, 0, 0);
+
+      // Check availability first
+      setCheckingAvailability(true);
+      const availability = await bookingsAPI.checkAvailability(
+        resourceId,
+        startDateTime.toISOString(),
+        endDateTime.toISOString()
+      );
+
+      if (!availability.available && !editingId) {
+        toast({
+          title: 'Indisponible',
+          description: 'Ce créneau n\'est pas disponible.',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        setCheckingAvailability(false);
+        return;
+      }
+
+      let response;
+      
+      if (editingId) {
+        // Update existing reservation
+        response = await bookingsAPI.update(editingId, {
+          resourceId,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
+          description: notes,
+        });
+        toast({ title: 'Réservation mise à jour', description: 'Vos modifications ont été enregistrées.' });
+      } else {
+        // Create new reservation
+        response = await bookingsAPI.create({
+          resourceId,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
+          description: notes,
+        });
+        toast({ title: 'Réservation créée', description: 'Vérification des détails...' });
+      }
+
+      const reservationId = response.reservation._id || response.reservation.id;
+      
+      // Redirect to review page
+      setTimeout(() => {
+        navigate('/reservations/review?reservationId=' + reservationId);
+      }, 500);
+    } catch (error: any) {
+      toast({
+        title: 'Erreur',
+        description: error.message || 'Impossible de créer la réservation.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+      setCheckingAvailability(false);
+    }
   };
 
   return (
@@ -54,7 +217,7 @@ export const NewReservationPage: React.FC = () => {
       <div className="max-w-2xl mx-auto space-y-6">
         <Button variant="ghost" onClick={() => navigate(-1)}><ArrowLeft className="h-4 w-4 mr-2" />Retour</Button>
         <Card>
-          <CardHeader><CardTitle>Nouvelle réservation</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{editingId ? 'Modifier la réservation' : 'Nouvelle réservation'}</CardTitle></CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
@@ -62,8 +225,10 @@ export const NewReservationPage: React.FC = () => {
                 <Select value={resourceId} onValueChange={setResourceId}>
                   <SelectTrigger><SelectValue placeholder="Sélectionner une ressource" /></SelectTrigger>
                   <SelectContent>
-                    {mockResources.filter(r => r.isActive).map(r => (
-                      <SelectItem key={r.id} value={r.id}>{r.name} - {r.pricePerHour}€/h</SelectItem>
+                    {resources.filter((r: any) => r.status === 'active').map((r: any) => (
+                      <SelectItem key={r._id || r.id} value={r._id || r.id}>
+                        {r.name} - {r.pricePerUnit} DH/{r.pricingModel === 'hourly' ? 'h' : r.pricingModel}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -77,7 +242,14 @@ export const NewReservationPage: React.FC = () => {
                       {date ? format(date, "PPP", { locale: fr }) : "Choisir une date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} disabled={(d) => d < new Date()} /></PopoverContent>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar 
+                      mode="single" 
+                      selected={date} 
+                      onSelect={handleDateSelect} 
+                      disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))} 
+                    />
+                  </PopoverContent>
                 </Popover>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -85,22 +257,45 @@ export const NewReservationPage: React.FC = () => {
                   <Label>Début</Label>
                   <Select value={startTime} onValueChange={setStartTime}>
                     <SelectTrigger><Clock className="h-4 w-4 mr-2" /><SelectValue placeholder="Heure" /></SelectTrigger>
-                    <SelectContent>{hours.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                    <SelectContent>
+                      {hours.map(h => {
+                        const hour = parseInt(h.split(':')[0]);
+                        const isReserved = reservedHours.includes(hour);
+                        return (
+                          <SelectItem key={h} value={h} disabled={isReserved}>
+                            {h} {isReserved && '(réservé)'}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Fin</Label>
                   <Select value={endTime} onValueChange={setEndTime}>
                     <SelectTrigger><Clock className="h-4 w-4 mr-2" /><SelectValue placeholder="Heure" /></SelectTrigger>
-                    <SelectContent>{hours.filter(h => h > startTime).map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}</SelectContent>
+                    <SelectContent>
+                      {hours.filter(h => h > startTime).map(h => {
+                        const hour = parseInt(h.split(':')[0]);
+                        const isReserved = reservedHours.includes(hour);
+                        return (
+                          <SelectItem key={h} value={h} disabled={isReserved}>
+                            {h} {isReserved && '(réservé)'}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
                   </Select>
                 </div>
               </div>
               <div className="space-y-2"><Label>Notes (optionnel)</Label><Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Informations complémentaires..." /></div>
               {resource && startTime && endTime && (
-                <div className="p-4 rounded-lg bg-muted text-center"><p className="text-sm text-muted-foreground">Total estimé</p><p className="text-3xl font-bold">{calculatePrice()}€</p></div>
+                <div className="p-4 rounded-lg bg-muted text-center"><p className="text-sm text-muted-foreground">Total estimé</p><p className="text-3xl font-bold">{calculatePrice()} DH</p></div>
               )}
-              <Button type="submit" className="w-full" disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirmer la réservation</Button>
+              <Button type="submit" className="w-full" disabled={isLoading || checkingAvailability}>
+                {(isLoading || checkingAvailability) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {checkingAvailability ? 'Vérification de la disponibilité...' : 'Confirmer la réservation'}
+              </Button>
             </form>
           </CardContent>
         </Card>

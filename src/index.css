@@ -98,6 +98,34 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    position: relative;
+    min-height: 100vh;
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.60), rgba(255, 255, 255, 0.60)),
+      url('/bg.png');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+  }
+
+  .dark body {
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.40), rgba(255, 255, 255, 0.20)),
+      url('/bg.png');
+  }
+
+  /* Auth pages with more visible background */
+  body.auth-page {
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.90), rgba(255, 255, 255, 0.04)),
+      url('/bg.png');
+  }
+
+  .dark body.auth-page {
+    background-image: 
+      linear-gradient(rgba(255, 255, 255, 0.70), rgba(255, 255, 255, 0.04)),
+      url('/bg.png');
   }
 }
