@@ -9,8 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { 
   Calendar, 
   Building2, 
-  TreePine, 
-  Package, 
+  MapPinned, 
+  Dumbbell, 
   Clock,
   TrendingUp,
   CalendarPlus,
@@ -37,6 +37,7 @@ import {
   CartesianGrid, 
   Tooltip, 
   Legend, 
+  LabelList,
   ResponsiveContainer 
 } from 'recharts';
 import { bookingsAPI, resourcesAPI, reviewsAPI } from '@/lib/api';
@@ -48,6 +49,11 @@ import { ReviewModal } from '@/components/reviews/ReviewModal';
 import { ReviewCard } from '@/components/reviews/ReviewCard';
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
+const RESOURCE_TYPE_COLORS: Record<string, string> = {
+  Terrains: '#10b981',
+  Salles: '#f59e0b',
+  Équipements: '#8b5cf6',
+};
 
 export const DashboardPage: React.FC = () => {
   const { user } = useAuth();
@@ -160,14 +166,14 @@ export const DashboardPage: React.FC = () => {
             { name: 'En attente', value: pendingBookings },
             { name: 'Complétées', value: completedBookings },
             { name: 'Annulées', value: userReservations.filter((b: any) => b.status === 'cancelled').length },
-          ].filter(item => item.value > 0);
+          ];
 
           // Resources by type
           const resourcesByType = [
             { name: 'Terrains', count: resources.filter((r: any) => r.type === 'terrain').length },
             { name: 'Salles', count: resources.filter((r: any) => r.type === 'salle').length },
             { name: 'Équipements', count: resources.filter((r: any) => r.type === 'equipment').length },
-          ].filter(item => item.count > 0);
+          ];
 
           setAdminStats({
             totalRevenue,
@@ -232,8 +238,8 @@ export const DashboardPage: React.FC = () => {
   const getResourceIcon = (type: string) => {
     switch (type) {
       case 'salle': return <Building2 className="h-4 w-4" />;
-      case 'terrain': return <TreePine className="h-4 w-4" />;
-      case 'equipment': return <Package className="h-4 w-4" />;
+      case 'terrain': return <MapPinned className="h-4 w-4" />;
+      case 'equipment': return <Dumbbell className="h-4 w-4" />;
       default: return <Calendar className="h-4 w-4" />;
     }
   };
@@ -438,13 +444,10 @@ export const DashboardPage: React.FC = () => {
                 <Star className="h-6 w-6 text-yellow-400 fill-yellow-400" />
                 Avis et commentaires
               </h2>
-              <Link to="/reviews" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                Voir tous →
-              </Link>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {reviews.slice(0, 6).map((review) => {
+              {reviews.slice(0, 3).map((review) => {
                 const resourceId = typeof review.resourceId === 'object' ? review.resourceId._id : review.resourceId;
                 const resourceType = typeof review.resourceId === 'object' ? review.resourceId.type : null;
                 const resourcePath = resourceType === 'terrain' ? 'terrains' : resourceType === 'salle' ? 'salles' : 'equipements';
@@ -478,13 +481,13 @@ export const DashboardPage: React.FC = () => {
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
-                              <AvatarImage src={review.user?.avatarUrl} />
+                              <AvatarImage src={(review.userId || review.user)?.avatarUrl} />
                               <AvatarFallback className="text-xs">
-                                {review.user?.firstName?.[0]}{review.user?.lastName?.[0]}
+                                {(review.userId || review.user)?.firstName?.[0]}{(review.userId || review.user)?.lastName?.[0]}
                               </AvatarFallback>
                             </Avatar>
                             <div>
-                              <p className="text-sm font-medium">{review.user?.firstName} {review.user?.lastName}</p>
+                              <p className="text-sm font-bold">{(review.userId || review.user)?.firstName} {(review.userId || review.user)?.lastName}</p>
                               <p className="text-xs text-muted-foreground">
                                 {format(new Date(review.createdAt), 'PP', { locale: fr })}
                               </p>
@@ -517,11 +520,13 @@ export const DashboardPage: React.FC = () => {
               })}
             </div>
 
-            {reviews.length > 6 && (
+            {/* Admin only: See all comments link */}
+            {user?.role === 'admin' && reviews.length > 0 && (
               <div className="text-center mt-6">
                 <Link to="/reviews" className="inline-block">
-                  <Button variant="outline">
-                    Voir tous les {reviews.length} avis
+                  <Button variant="outline" className="gap-2">
+                    Voir tous les commentaires ({reviews.length})
+                    <span>→</span>
                   </Button>
                 </Link>
               </div>
@@ -534,8 +539,8 @@ export const DashboardPage: React.FC = () => {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-all">
               <CardHeader className="flex flex-row items-center justify-between pb-3 bg-green-50">
-                <CardTitle className="text-sm font-medium">⚽ Terrains</CardTitle>
-                <TreePine className="h-5 w-5 text-green-600" />
+                <CardTitle className="text-sm font-medium">🏟️ Terrains</CardTitle>
+                <MapPinned className="h-5 w-5 text-green-600" />
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="text-3xl font-bold text-green-600">{stats.terrains}</div>
@@ -556,8 +561,8 @@ export const DashboardPage: React.FC = () => {
 
             <Card className="border-l-4 border-l-purple-500 hover:shadow-lg transition-all">
               <CardHeader className="flex flex-row items-center justify-between pb-3 bg-purple-50">
-                <CardTitle className="text-sm font-medium">📦 Équipements</CardTitle>
-                <Package className="h-5 w-5 text-purple-600" />
+                <CardTitle className="text-sm font-medium">🏋️ Équipements</CardTitle>
+                <Dumbbell className="h-5 w-5 text-purple-600" />
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="text-3xl font-bold text-purple-600">{stats.equipment}</div>
@@ -581,7 +586,7 @@ export const DashboardPage: React.FC = () => {
                     <CardContent className="pt-6 pb-6 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <div className="p-4 bg-green-100 rounded-full group-hover:bg-green-200 transition-colors">
-                          <TreePine className="h-8 w-8 text-green-600" />
+                          <MapPinned className="h-8 w-8 text-green-600" />
                         </div>
                         <div>
                           <h3 className="font-bold text-lg text-green-700">Terrains</h3>
@@ -613,7 +618,7 @@ export const DashboardPage: React.FC = () => {
                     <CardContent className="pt-6 pb-6 text-center">
                       <div className="flex flex-col items-center gap-3">
                         <div className="p-4 bg-purple-100 rounded-full group-hover:bg-purple-200 transition-colors">
-                          <Package className="h-8 w-8 text-purple-600" />
+                          <Dumbbell className="h-8 w-8 text-purple-600" />
                         </div>
                         <div>
                           <h3 className="font-bold text-lg text-purple-700">Équipements</h3>
@@ -740,19 +745,19 @@ export const DashboardPage: React.FC = () => {
                         <PieChart>
                           <Pie
                             data={adminStats.bookingsByStatus}
-                            cx="50%"
+                            cx="40%"
                             cy="50%"
-                            labelLine={false}
-                            label={({ name, value }) => `${name}: ${value}`}
                             outerRadius={80}
                             fill="#8884d8"
                             dataKey="value"
+                            label={({ value }) => value}
                           >
                             {adminStats.bookingsByStatus.map((entry, index) => (
                               <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                             ))}
                           </Pie>
                           <Tooltip formatter={(value) => `${value} réservations`} />
+                          <Legend verticalAlign="middle" align="right" layout="vertical" />
                         </PieChart>
                       </ResponsiveContainer>
                     ) : (
@@ -768,10 +773,10 @@ export const DashboardPage: React.FC = () => {
               <Card className="mt-6">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Package className="h-5 w-5 text-purple-600" />
-                    Ressources par type
+                    <Dumbbell className="h-5 w-5 text-purple-600" />
+                    Distribution des ressources
                   </CardTitle>
-                  <CardDescription>Distribution des ressources disponibles</CardDescription>
+                  <CardDescription>Répartition par type de ressource</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {adminStats.resourcesByType.length > 0 ? (
@@ -780,9 +785,16 @@ export const DashboardPage: React.FC = () => {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" />
                         <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="count" fill="#8b5cf6" name="Nombre de ressources" radius={[8, 8, 0, 0]} />
+                        <Tooltip formatter={(value) => `${value} ressources`} />
+                        <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                          {adminStats.resourcesByType.map((entry, index) => (
+                            <Cell
+                              key={`bar-${entry.name}-${index}`}
+                              fill={RESOURCE_TYPE_COLORS[entry.name] || CHART_COLORS[index % CHART_COLORS.length]}
+                            />
+                          ))}
+                          <LabelList dataKey="count" position="top" />
+                        </Bar>
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (

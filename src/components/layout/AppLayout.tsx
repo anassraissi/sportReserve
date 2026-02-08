@@ -15,8 +15,8 @@ import {
   LayoutDashboard,
   Calendar,
   Building2,
-  TreePine,
-  Package,
+  MapPinned,
+  Dumbbell,
   Users,
   Settings,
   LogOut,
@@ -33,16 +33,16 @@ interface AppLayoutProps {
 const navigation = [
   { name: 'Tableau de bord', href: '/dashboard', icon: LayoutDashboard, emoji: '📊' },
   { name: 'Réservations', href: '/reservations', icon: Calendar, emoji: '📅' },
-  { name: 'Terrains de sport', href: '/resources/terrains', icon: TreePine, emoji: '⚽' },
+  { name: 'Terrains de sport', href: '/resources/terrains', icon: MapPinned, emoji: '🏟️' },
   { name: 'Salles de sport', href: '/resources/salles', icon: Building2, emoji: '🏛️' },
-  { name: 'Équipements', href: '/resources/equipment', icon: Package, emoji: '📦' },
+  { name: 'Équipements', href: '/resources/equipment', icon: Dumbbell, emoji: '🏋️' },
 ];
 
 const adminNavigation = [
   { name: 'Avis & Commentaires', href: '/reviews', icon: Star, emoji: '⭐' },
   { name: 'Gestion Utilisateurs', href: '/admin/users', icon: Users, emoji: '👥' },
   { name: 'Gestion Réservations', href: '/admin/reservations', icon: Calendar, emoji: '🔧' },
-  { name: 'Gestion Ressources', href: '/admin/resources', icon: Package, emoji: '🏛️' },
+  { name: 'Gestion Ressources', href: '/admin/resources', icon: Dumbbell, emoji: '🏛️' },
 ];
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
@@ -125,7 +125,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   )}
                   onClick={() => setSidebarOpen(false)}
                 >
-                  <span className="text-base">📦</span>
+                  <span className="text-base">🧩</span>
                   Mes ressources
                 </Link>
 

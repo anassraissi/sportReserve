@@ -55,10 +55,10 @@ interface Resource {
 }
 
 const typeEmojis: Record<string, string> = {
-  terrain: '⚽',
+  terrain: '🏟️',
   salle: '🏛️',
-  equipment: '📦',
-  default: '📦',
+  equipment: '🏋️',
+  default: '🏋️',
 };
 
 const statusColors: Record<string, string> = {
@@ -336,9 +336,9 @@ export const AdminResourcesPage: React.FC = () => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Tous les types</SelectItem>
-                  <SelectItem value="terrain">⚽ Terrain de sport</SelectItem>
+                  <SelectItem value="terrain">🏟️ Terrain de sport</SelectItem>
                   <SelectItem value="salle">🏛️ Salle de sport</SelectItem>
-                  <SelectItem value="equipment">📦 Équipement</SelectItem>
+                  <SelectItem value="equipment">🏋️ Équipement</SelectItem>
                 </SelectContent>
               </Select>
             </div>

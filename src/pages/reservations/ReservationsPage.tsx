@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Building2, TreePine, Package, CalendarPlus, X, Loader2, Printer, Edit2, CreditCard, ArrowRight } from 'lucide-react';
+import { Calendar, Building2, MapPinned, Dumbbell, CalendarPlus, X, Loader2, Printer, Edit2, CreditCard, ArrowRight } from 'lucide-react';
 import { bookingsAPI } from '@/lib/api';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -60,8 +60,8 @@ export const ReservationsPage: React.FC = () => {
   const getResourceIcon = (type: string) => {
     switch (type) {
       case 'room': return <Building2 className="h-4 w-4" />;
-      case 'field': return <TreePine className="h-4 w-4" />;
-      case 'equipment': return <Package className="h-4 w-4" />;
+      case 'field': return <MapPinned className="h-4 w-4" />;
+      case 'equipment': return <Dumbbell className="h-4 w-4" />;
       default: return <Calendar className="h-4 w-4" />;
     }
   };

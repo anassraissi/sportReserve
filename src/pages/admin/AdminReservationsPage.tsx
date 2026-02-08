@@ -343,7 +343,7 @@ export const AdminReservationsPage: React.FC = () => {
                       👤 Client
                     </th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
-                      📦 Ressource
+                      🏷️ Ressource
                     </th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
                       📅 Date
@@ -401,7 +401,7 @@ export const AdminReservationsPage: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-4 py-4 text-sm font-semibold text-slate-900">
-                        {reservation.totalAmount.toFixed(2)} €
+                        {reservation.totalAmount.toFixed(2)} DH
                       </td>
                       <td className="px-4 py-4 text-sm">
                         <Badge

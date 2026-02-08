@@ -38,11 +38,11 @@ router.get('/', async (req, res) => {
       if (reviewObj.resourceId && reviewObj.resourceId._id) {
         const firstImage = await MediaAsset.findOne({
           resourceId: reviewObj.resourceId._id,
-          type: 'image'
+          mediaType: 'image'
         }).sort({ displayOrder: 1, createdAt: 1 });
         
         if (firstImage) {
-          reviewObj.resourceId.imageUrl = firstImage.url;
+          reviewObj.resourceId.imageUrl = firstImage.originalUrl;
         }
       }
       return reviewObj;
@@ -86,11 +86,11 @@ router.get('/:id', async (req, res) => {
     if (reviewObj.resourceId && reviewObj.resourceId._id) {
       const firstImage = await MediaAsset.findOne({
         resourceId: reviewObj.resourceId._id,
-        type: 'image'
+        mediaType: 'image'
       }).sort({ displayOrder: 1, createdAt: 1 });
       
       if (firstImage) {
-        reviewObj.resourceId.imageUrl = firstImage.url;
+        reviewObj.resourceId.imageUrl = firstImage.originalUrl;
       }
     }
 
@@ -149,7 +149,20 @@ router.post(
       await review.populate('userId', 'firstName lastName avatarUrl');
       await review.populate('resourceId', 'name type');
 
-      res.status(201).json({ review });
+      // Add first image from MediaAsset for the resource
+      const reviewObj = review.toObject();
+      if (reviewObj.resourceId && reviewObj.resourceId._id) {
+        const firstImage = await MediaAsset.findOne({
+          resourceId: reviewObj.resourceId._id,
+          mediaType: 'image'
+        }).sort({ displayOrder: 1, createdAt: 1 });
+        
+        if (firstImage) {
+          reviewObj.resourceId.imageUrl = firstImage.originalUrl;
+        }
+      }
+
+      res.status(201).json({ review: reviewObj });
     } catch (error) {
       console.error('Create review error:', error);
       res.status(500).json({ message: 'Server error', error: error.message });

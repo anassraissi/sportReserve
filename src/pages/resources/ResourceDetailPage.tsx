@@ -7,11 +7,10 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { 
   Building2, 
-  TreePine, 
-  Package, 
+  MapPinned, 
+  Dumbbell, 
   Users, 
   Clock, 
-  Euro,
   CalendarPlus,
   ArrowLeft,
   CheckCircle,
@@ -28,9 +27,9 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getImageUrl } from '@/lib/utils';
 
 const resourceTypeConfig: Record<ResourceType, { icon: React.ElementType }> = {
-  terrain: { icon: TreePine },
+  terrain: { icon: MapPinned },
   salle: { icon: Building2 },
-  equipment: { icon: Package },
+  equipment: { icon: Dumbbell },
 };
 
 export const ResourceDetailPage: React.FC = () => {
@@ -285,7 +284,7 @@ export const ResourceDetailPage: React.FC = () => {
 
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Prix</span>
-                  <span className="text-2xl font-bold">{resource.pricePerUnit}€/{resource.pricingModel === 'hourly' ? 'heure' : resource.pricingModel}</span>
+                  <span className="text-2xl font-bold">{resource.pricePerUnit} DH/{resource.pricingModel === 'hourly' ? 'heure' : resource.pricingModel}</span>
                 </div>
 
                 <Button className="w-full" size="lg" asChild>

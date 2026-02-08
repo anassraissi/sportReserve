@@ -8,11 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Building2, 
-  TreePine, 
-  Package, 
+  MapPinned, 
+  Dumbbell, 
   Users, 
   Clock, 
-  Euro,
   Search,
   Filter,
   CalendarPlus,
@@ -29,7 +28,7 @@ import { getImageUrl } from '@/lib/utils';
 const resourceTypeConfig: Record<ResourceType, { title: string; icon: React.ElementType; description: string }> = {
   terrain: {
     title: 'Terrains de sport',
-    icon: TreePine,
+    icon: MapPinned,
     description: 'Terrains de tennis, basketball, football, etc.',
   },
   salle: {
@@ -39,7 +38,7 @@ const resourceTypeConfig: Record<ResourceType, { title: string; icon: React.Elem
   },
   equipment: {
     title: 'Équipements',
-    icon: Package,
+    icon: Dumbbell,
     description: 'Équipements sportifs à louer (raquettes, ballons, etc.)',
   },
 };
@@ -60,7 +59,7 @@ export const ResourceListPage: React.FC = () => {
   }, [type]);
   
   const config = resourceType ? resourceTypeConfig[resourceType] : resourceTypeConfig.terrain;
-  const Icon = config?.icon || TreePine;
+  const Icon = config?.icon || MapPinned;
 
   useEffect(() => {
     const loadResources = async () => {
@@ -190,7 +189,7 @@ export const ResourceListPage: React.FC = () => {
             )}
             <Select value={priceSort} onValueChange={setPriceSort}>
               <SelectTrigger className="w-full sm:w-[180px]">
-                <Euro className="h-4 w-4 mr-2" />
+                <span className="text-sm font-semibold mr-2">DH</span>
                 <SelectValue placeholder="Trier par prix" />
               </SelectTrigger>
               <SelectContent>
@@ -358,8 +357,8 @@ export const ResourceListPage: React.FC = () => {
                       </div>
                     )}
                     <div className="flex items-center gap-2 font-medium col-span-2">
-                      <Euro className="h-4 w-4" />
-                      <span>{resource.pricePerUnit}€/{resource.pricingModel === 'hourly' ? 'heure' : resource.pricingModel}</span>
+                      <span className="font-bold text-amber-600">DH</span>
+                      <span>{resource.pricePerUnit} DH/{resource.pricingModel === 'hourly' ? 'heure' : resource.pricingModel}</span>
                     </div>
                   </div>
                 </CardContent>

@@ -10,11 +10,10 @@ import {
   Edit, 
   Trash2, 
   Image as ImageIcon,
-  Euro,
   Users,
-  Package,
+  Dumbbell,
   Building2,
-  TreePine,
+  MapPinned,
   Loader2,
   ChevronLeft,
   ChevronRight,
@@ -107,9 +106,9 @@ export const MyResourcesPage: React.FC = () => {
   const getResourceIcon = (type: string) => {
     switch (type) {
       case 'salle': return <Building2 className="h-4 w-4" />;
-      case 'terrain': return <TreePine className="h-4 w-4" />;
-      case 'equipment': return <Package className="h-4 w-4" />;
-      default: return <Package className="h-4 w-4" />;
+      case 'terrain': return <MapPinned className="h-4 w-4" />;
+      case 'equipment': return <Dumbbell className="h-4 w-4" />;
+      default: return <Dumbbell className="h-4 w-4" />;
     }
   };
 
@@ -156,7 +155,7 @@ export const MyResourcesPage: React.FC = () => {
         {resources.length === 0 ? (
           <Card className="text-center py-12">
             <CardContent>
-              <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <Dumbbell className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
               <h3 className="text-lg font-semibold mb-2">Aucune ressource</h3>
               <p className="text-muted-foreground mb-4">
                 Commencez par ajouter votre première ressource à louer.
@@ -289,8 +288,8 @@ export const MyResourcesPage: React.FC = () => {
                       </div>
                     )}
                     <div className="flex items-center gap-2 font-medium">
-                      <Euro className="h-4 w-4" />
-                      <span>{resource.pricePerUnit}€/{resource.pricingModel === 'hourly' ? 'h' : resource.pricingModel}</span>
+                      <span className="font-bold text-amber-600">DH</span>
+                      <span>{resource.pricePerUnit} DH/{resource.pricingModel === 'hourly' ? 'h' : resource.pricingModel}</span>
                     </div>
                   </div>
                 </CardContent>

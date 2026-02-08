@@ -265,7 +265,7 @@ export default function LoginPage() {
                   </div>
 
                   {/* Forgot password */}
-                  <div className="flex items-center justify-between">
+                  {/* <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <input
                         type="checkbox"
@@ -282,7 +282,7 @@ export default function LoginPage() {
                     >
                       Mot de passe oublié ?
                     </Link>
-                  </div>
+                  </div> */}
 
                   {/* Google Sign-In */}
                   <div className="space-y-3">

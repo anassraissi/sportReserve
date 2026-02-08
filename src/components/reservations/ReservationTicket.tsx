@@ -202,8 +202,8 @@ export const ReservationTicket: React.FC<ReservationTicketProps> = ({
             {/* Price */}
             <div className="ticket-section mb-4">
               <h3 className="text-xs text-gray-600 uppercase mb-1">Montant</h3>
-              <p className="text-xl font-bold">{reservation.totalAmount?.toFixed(2) || '0.00'}€</p>
-              {reservation.currency && reservation.currency !== 'EUR' && (
+              <p className="text-xl font-bold">{reservation.totalAmount?.toFixed(2) || '0.00'} DH</p>
+              {reservation.currency && reservation.currency !== 'DH' && (
                 <p className="text-xs text-gray-600">Devise: {reservation.currency}</p>
               )}
             </div>
