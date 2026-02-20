@@ -23,6 +23,7 @@ import {
 import { reviewsAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { ReviewCard } from '@/components/reviews/ReviewCard';
+import { useAuth } from '@/contexts/AuthContext';
 
 export const ReviewsPage: React.FC = () => {
   const [reviews, setReviews] = useState<any[]>([]);
@@ -38,6 +39,7 @@ export const ReviewsPage: React.FC = () => {
   });
 
   const { toast } = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
     loadReviews();
@@ -47,28 +49,30 @@ export const ReviewsPage: React.FC = () => {
     applyFilters();
   }, [reviews, ratingFilter, sortBy, searchQuery]);
 
+  const updateStats = (allReviews: any[]) => {
+    const totalReviews = allReviews.length;
+    const sum = allReviews.reduce((acc: number, r: any) => acc + (r.rating || 0), 0);
+    const averageRating = totalReviews > 0 ? (sum / totalReviews).toFixed(1) : 0;
+
+    const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    allReviews.forEach((r: any) => {
+      distribution[r.rating as keyof typeof distribution]++;
+    });
+
+    setStats({
+      totalReviews,
+      averageRating: parseFloat(String(averageRating)),
+      ratingDistribution: distribution,
+    });
+  };
+
   const loadReviews = async () => {
     try {
       setIsLoading(true);
       const res = await reviewsAPI.getAll({ page: 1, limit: 1000 });
       const allReviews = res.reviews || [];
       setReviews(allReviews);
-
-      // Calculate stats
-      const totalReviews = allReviews.length;
-      const sum = allReviews.reduce((acc: number, r: any) => acc + (r.rating || 0), 0);
-      const averageRating = totalReviews > 0 ? (sum / totalReviews).toFixed(1) : 0;
-
-      const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-      allReviews.forEach((r: any) => {
-        distribution[r.rating as keyof typeof distribution]++;
-      });
-
-      setStats({
-        totalReviews,
-        averageRating: parseFloat(String(averageRating)),
-        ratingDistribution: distribution,
-      });
+      updateStats(allReviews);
     } catch (error: any) {
       console.error('Error loading reviews:', error);
       toast({
@@ -78,6 +82,25 @@ export const ReviewsPage: React.FC = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    try {
+      await reviewsAPI.delete(reviewId);
+      const nextReviews = reviews.filter((r) => (r._id || r.id) !== reviewId);
+      setReviews(nextReviews);
+      updateStats(nextReviews);
+      toast({
+        title: 'Avis supprime',
+        description: 'Votre avis a ete supprime avec succes.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de supprimer votre avis.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -291,7 +314,12 @@ export const ReviewsPage: React.FC = () => {
         {filteredReviews.length > 0 ? (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {filteredReviews.map((review) => (
-              <ReviewCard key={review._id || review.id} review={review} />
+              <ReviewCard
+                key={review._id || review.id}
+                review={review}
+                currentUserId={user?.id}
+                onDelete={handleDeleteReview}
+              />
             ))}
           </div>
         ) : (

@@ -12,6 +12,7 @@ import { ArrowLeft, Loader2, Save, Upload, Image as ImageIcon, X, Users } from '
 import { resourcesAPI, mediaAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDataSync } from '@/contexts/DataSyncContext';
 import { getImageUrl } from '@/lib/utils';
 
 export const ResourceFormPage: React.FC = () => {
@@ -19,6 +20,7 @@ export const ResourceFormPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { triggerRefresh, checkForUpdates } = useDataSync();
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -31,7 +33,7 @@ export const ResourceFormPage: React.FC = () => {
     unit: 'players' as 'persons' | 'items' | 'square_meters' | 'players',
     pricePerUnit: '',
     pricingModel: 'hourly' as 'hourly' | 'daily' | 'weekly' | 'monthly' | 'package',
-    currency: 'EUR',
+    currency: 'DH',
     taxRate: '20',
     minBookingHours: '1',
     maxBookingHours: '24',
@@ -64,7 +66,7 @@ export const ResourceFormPage: React.FC = () => {
             unit: resource.unit || 'persons',
             pricePerUnit: resource.pricePerUnit?.toString() || '',
             pricingModel: resource.pricingModel || 'hourly',
-            currency: resource.currency || 'EUR',
+            currency: resource.currency || 'DH',
             taxRate: resource.taxRate?.toString() || '20',
             minBookingHours: resource.minBookingHours?.toString() || '1',
             maxBookingHours: resource.maxBookingHours?.toString() || '24',
@@ -173,6 +175,11 @@ export const ResourceFormPage: React.FC = () => {
       let resourceId = id;
       if (id) {
         await resourcesAPI.update(id, data);
+        
+        // Trigger immediate data sync
+        triggerRefresh('resources');
+        await checkForUpdates();
+        
         toast({
           title: 'Succès',
           description: 'Ressource mise à jour avec succès.',
@@ -180,6 +187,11 @@ export const ResourceFormPage: React.FC = () => {
       } else {
         const result = await resourcesAPI.create(data);
         resourceId = result.resource._id || result.resource.id;
+        
+        // Trigger immediate data sync
+        triggerRefresh('resources');
+        await checkForUpdates();
+        
         toast({
           title: 'Succès',
           description: 'Ressource créée avec succès.',

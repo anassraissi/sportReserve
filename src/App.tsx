@@ -5,7 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { DataSyncProvider } from "@/contexts/DataSyncContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { ChatBot } from "@/components/chat/ChatBot";
 import LoginPage from "./pages/auth/LoginPage";
 import { RegisterPage } from "./pages/auth/RegisterPage";
 import VerifyEmailPage from "./pages/auth/VerifyEmailPage";
@@ -36,10 +38,12 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
       <AuthProvider>
-        <TooltipProvider>
+        <DataSyncProvider>
+          <TooltipProvider>
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <ChatBot />
             <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/login" element={<LoginPage />} />
@@ -67,7 +71,8 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
-        </TooltipProvider>
+          </TooltipProvider>
+        </DataSyncProvider>
       </AuthProvider>
     </GoogleOAuthProvider>
   </QueryClientProvider>

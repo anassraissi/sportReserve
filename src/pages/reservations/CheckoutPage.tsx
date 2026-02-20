@@ -11,6 +11,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useDataSync } from '@/contexts/DataSyncContext';
 
 interface CheckoutPageProps {}
 
@@ -18,6 +19,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { triggerRefresh, checkForUpdates } = useDataSync();
 
   const [isLoading, setIsLoading] = useState(false);
   const [reservation, setReservation] = useState<any>(null);
@@ -122,6 +124,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = () => {
     return true;
   };
 
+  // PAYMENT PROCESSING - ACTIVATED
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -133,9 +136,8 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = () => {
       setIsLoading(true);
       setError(null);
 
-      // Process payment
       const paymentResponse = await bookingsAPI.processPayment(reservationId, {
-        amount: Math.round(reservation.totalAmount * 100), // Convert to cents
+        amount: Math.round(reservation.totalAmount * 100),
         currency: 'dh',
         cardDetails: {
           number: cardDetails.cardNumber.replace(/\s/g, ''),
@@ -148,11 +150,14 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = () => {
       });
 
       if (paymentResponse.success) {
+        // Trigger data sync for all pages
+        triggerRefresh('reservations');
+        await checkForUpdates();
+        
         toast({
           title: 'Paiement réussi',
           description: 'Votre réservation a été confirmée.',
         });
-        // Redirect to success page after 1 second
         setTimeout(() => {
           navigate(`/reservations/success?reservationId=${reservationId}`);
         }, 1000);
@@ -220,7 +225,6 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = () => {
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
-          {/* Payment Form */}
           <div className="md:col-span-2">
             <Card className="shadow-lg border-0">
               <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">

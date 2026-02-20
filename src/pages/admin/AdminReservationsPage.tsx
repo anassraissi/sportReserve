@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { bookingsAPI } from '@/lib/api';
+import { useDataSync } from '@/contexts/DataSyncContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -74,6 +75,7 @@ const statusEmojis: Record<string, string> = {
 };
 
 export const AdminReservationsPage: React.FC = () => {
+  const { reservationsVersion } = useDataSync();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [filteredReservations, setFilteredReservations] = useState<Reservation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -116,7 +118,7 @@ export const AdminReservationsPage: React.FC = () => {
     };
 
     fetchReservations();
-  }, [toast]);
+  }, [toast]); // Only reload on mount, not on version changes
 
   // Filter reservations based on status and search
   useEffect(() => {
@@ -329,35 +331,32 @@ export const AdminReservationsPage: React.FC = () => {
             📋 Réservations ({filteredReservations.length})
           </CardTitle>
         </CardHeader>
-        <CardContent className="pt-0">
+        <CardContent className="pt-0 px-0">
           {filteredReservations.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-slate-500">Aucune réservation trouvée</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto scrollbar-hide">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50">
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
+                  <tr className="border-b-2 border-slate-300 bg-slate-100">
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-800 whitespace-nowrap w-1/6">
                       👤 Client
                     </th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-800 whitespace-nowrap w-1/6">
                       🏷️ Ressource
                     </th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
-                      📅 Date
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-800 whitespace-nowrap w-1/5">
+                      📅 Date & Horaire
                     </th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
-                      ⏰ Horaire
-                    </th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-800 whitespace-nowrap w-1/8">
                       Montant
                     </th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-slate-700">
+                    <th className="px-4 py-3 text-left text-xs font-bold text-slate-800 whitespace-nowrap w-1/6">
                       Statut
                     </th>
-                    <th className="px-4 py-3 text-right text-sm font-semibold text-slate-700">
+                    <th className="px-4 py-3 text-center text-xs font-bold text-slate-800 whitespace-nowrap w-1/8">
                       Actions
                     </th>
                   </tr>
@@ -366,31 +365,31 @@ export const AdminReservationsPage: React.FC = () => {
                   {filteredReservations.map((reservation) => (
                     <tr
                       key={reservation._id}
-                      className="border-b border-slate-200 hover:bg-slate-50 transition-colors"
+                      className="border-b border-slate-200 hover:bg-blue-50 transition-colors"
                     >
-                      <td className="px-4 py-4 text-sm">
+                      <td className="px-4 py-3 text-xs w-1/6">
                         <div className="font-semibold text-slate-900">
                           {reservation.userId?.firstName || 'N/A'} {reservation.userId?.lastName || ''}
                         </div>
-                        <div className="text-xs text-slate-500">{reservation.userId?.email || 'N/A'}</div>
+                        <div className="text-xs text-slate-600 mt-0.5 truncate">{reservation.userId?.email || 'N/A'}</div>
                       </td>
-                      <td className="px-4 py-4 text-sm">
+                      <td className="px-4 py-3 text-xs w-1/6">
                         <div className="font-semibold text-slate-900">
                           {reservation.resourceId?.name || 'N/A'}
                         </div>
-                        <div className="text-xs text-slate-500">
+                        <div className="text-xs text-slate-600 mt-0.5">
                           {reservation.resourceId?.category || 'N/A'}
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-sm text-slate-900">
-                        <div>
+                      <td className="px-4 py-3 text-xs w-1/5">
+                        <div className="font-medium text-slate-900">
                           {reservation.startTime
-                            ? format(new Date(reservation.startTime), 'EEEE dd MMM yyyy', {
+                            ? format(new Date(reservation.startTime), 'dd MMM', {
                                 locale: fr,
                               })
                             : 'N/A'}
                         </div>
-                        <div className="text-xs text-slate-600">
+                        <div className="text-xs text-slate-600 mt-0.5 font-mono">
                           {reservation.startTime
                             ? format(new Date(reservation.startTime), 'HH:mm')
                             : 'N/A'}{' '}
@@ -400,40 +399,42 @@ export const AdminReservationsPage: React.FC = () => {
                             : 'N/A'}
                         </div>
                       </td>
-                      <td className="px-4 py-4 text-sm font-semibold text-slate-900">
-                        {reservation.totalAmount.toFixed(2)} DH
+                      <td className="px-4 py-3 font-bold text-slate-900 text-sm w-1/8">
+                        {reservation.totalAmount.toFixed(0)} DH
                       </td>
-                      <td className="px-4 py-4 text-sm">
+                      <td className="px-4 py-3 text-xs w-1/6">
                         <Badge
                           variant="outline"
                           className={cn(
-                            'border px-2 py-1',
+                            'border px-2 py-1 text-xs font-semibold',
                             statusColors[reservation.status]
                           )}
                         >
                           {statusEmojis[reservation.status]} {reservation.status}
                         </Badge>
                       </td>
-                      <td className="px-4 py-4 text-right space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                          onClick={() => {
-                            setSelectedReservation(reservation);
-                            setIsEditDialogOpen(true);
-                          }}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 border-red-300 hover:bg-red-50"
-                          onClick={() => setDeleteId(reservation._id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      <td className="px-4 py-3 text-center w-1/8">
+                        <div className="flex justify-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-blue-600 border-blue-300 hover:bg-blue-50 h-8 w-8 p-0"
+                            onClick={() => {
+                              setSelectedReservation(reservation);
+                              setIsEditDialogOpen(true);
+                            }}
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 border-red-300 hover:bg-red-50 h-8 w-8 p-0"
+                            onClick={() => setDeleteId(reservation._id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))}

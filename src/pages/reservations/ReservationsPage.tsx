@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useDataSync } from '@/contexts/DataSyncContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ import { ReservationTicket } from '@/components/reservations/ReservationTicket';
 
 export const ReservationsPage: React.FC = () => {
   const { user } = useAuth();
+  const { reservationsVersion, triggerRefresh, checkForUpdates } = useDataSync();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [reservations, setReservations] = useState<any[]>([]);
@@ -44,7 +46,7 @@ export const ReservationsPage: React.FC = () => {
     if (user) {
       loadReservations();
     }
-  }, [user, toast]);
+  }, [user, toast]); // Only reload on mount, not on version changes
 
   const getStatusBadge = (status: string) => {
     const variants: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
@@ -72,6 +74,11 @@ export const ReservationsPage: React.FC = () => {
       setReservations(prev => prev.map((r: any) => 
         (r._id === id || r.id === id) ? { ...r, status: 'cancelled' } : r
       ));
+      
+      // Trigger immediate data sync
+      triggerRefresh('reservations');
+      await checkForUpdates();
+      
       toast({ title: 'Réservation annulée', description: 'Votre réservation a été annulée.' });
     } catch (error: any) {
       toast({
@@ -174,7 +181,7 @@ export const ReservationsPage: React.FC = () => {
                       <CreditCard className="h-4 w-4 mr-1" /> Payer
                     </Button>
                   )}
-                  {['pending', 'confirmed'].includes(reservation.status) && !isPast && (
+                  {['confirmed'].includes(reservation.status) && !isPast && (
                     <Button 
                       variant="outline" 
                       size="sm" 

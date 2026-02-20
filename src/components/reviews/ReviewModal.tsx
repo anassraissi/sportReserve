@@ -78,7 +78,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
 
           {/* Comment Section */}
           <div className="space-y-2">
-            <Label htmlFor="comment">Commentaire</Label>
+            <Label htmlFor="comment">Commentaire (optionnel)</Label>
             <Textarea
               id="comment"
               placeholder="Décrivez votre expérience (équipement, personnel, propreté...)"
@@ -108,7 +108,7 @@ export const ReviewModal: React.FC<ReviewModalProps> = ({
           </Button>
           <Button 
             onClick={handleSubmit} 
-            disabled={isSubmitting || !comment.trim()}
+            disabled={isSubmitting}
             className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
           >
             {isSubmitting ? 'Envoi en cours...' : 'Publier mon avis'}

@@ -108,7 +108,7 @@ router.post(
   [
     body('resourceId').notEmpty().withMessage('Resource ID required'),
     body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be 1-5'),
-    body('comment').notEmpty().isLength({ min: 3, max: 1000 }).withMessage('Comment required (3-1000 chars)'),
+    body('comment').optional({ checkFalsy: true }).isLength({ max: 1000 }).withMessage('Comment max 1000 chars'),
   ],
   async (req, res) => {
     try {

@@ -14,10 +14,12 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { useDataSync } from '@/contexts/DataSyncContext';
 
 export const NewReservationPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { triggerRefresh, checkForUpdates } = useDataSync();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [resources, setResources] = useState<any[]>([]);
@@ -196,6 +198,10 @@ export const NewReservationPage: React.FC = () => {
 
       const reservationId = response.reservation._id || response.reservation.id;
       
+      // Trigger data sync for all pages
+      triggerRefresh('reservations');
+      await checkForUpdates();
+      
       // Redirect to review page
       setTimeout(() => {
         navigate('/reservations/review?reservationId=' + reservationId);
@@ -261,9 +267,14 @@ export const NewReservationPage: React.FC = () => {
                       {hours.map(h => {
                         const hour = parseInt(h.split(':')[0]);
                         const isReserved = reservedHours.includes(hour);
+                        const now = new Date();
+                        const isToday = date && date.toDateString() === now.toDateString();
+                        const isPastHour = isToday && hour <= now.getHours();
+                        const isDisabled = isReserved || isPastHour;
+                        
                         return (
-                          <SelectItem key={h} value={h} disabled={isReserved}>
-                            {h} {isReserved && '(réservé)'}
+                          <SelectItem key={h} value={h} disabled={isDisabled}>
+                            {h} {isReserved && '(réservé)'} {isPastHour && !isReserved && '(passé)'}
                           </SelectItem>
                         );
                       })}
@@ -278,9 +289,14 @@ export const NewReservationPage: React.FC = () => {
                       {hours.filter(h => h > startTime).map(h => {
                         const hour = parseInt(h.split(':')[0]);
                         const isReserved = reservedHours.includes(hour);
+                        const now = new Date();
+                        const isToday = date && date.toDateString() === now.toDateString();
+                        const isPastHour = isToday && hour <= now.getHours();
+                        const isDisabled = isReserved || isPastHour;
+                        
                         return (
-                          <SelectItem key={h} value={h} disabled={isReserved}>
-                            {h} {isReserved && '(réservé)'}
+                          <SelectItem key={h} value={h} disabled={isDisabled}>
+                            {h} {isReserved && '(réservé)'} {isPastHour && !isReserved && '(passé)'}
                           </SelectItem>
                         );
                       })}

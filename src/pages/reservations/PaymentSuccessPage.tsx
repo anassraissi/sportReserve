@@ -173,8 +173,10 @@ export const PaymentSuccessPage: React.FC = () => {
               </CardHeader>
               <CardContent className="pt-6 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-600">Tarif horaire</span>
-                  <span className="font-semibold">{reservation.pricePerHour || 0} DH</span>
+                  <span className="text-slate-600">Prix unitaire</span>
+                  <span className="font-semibold">
+                    {reservation.resourceId?.pricePerUnit || Math.round((reservation.totalAmount || 0) / (reservation.durationHours || 1))} DH
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-slate-600">Durée</span>

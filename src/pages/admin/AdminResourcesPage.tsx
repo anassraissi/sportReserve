@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { getImageUrl } from '@/lib/utils';
 import { Input } from '@/components/ui/input';    
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useDataSync } from '@/contexts/DataSyncContext';
 import {
   Select,
   SelectContent,
@@ -74,6 +75,7 @@ const statusEmojis: Record<string, string> = {
 };
 
 export const AdminResourcesPage: React.FC = () => {
+  const { resourcesVersion, triggerRefresh, checkForUpdates } = useDataSync();
   const [resources, setResources] = useState<Resource[]>([]);
   const [filteredResources, setFilteredResources] = useState<Resource[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -137,7 +139,7 @@ export const AdminResourcesPage: React.FC = () => {
     };
 
     fetchResources();
-  }, [toast]);
+  }, [toast]); // Only reload on mount, not on version changes
 
   // Filter resources based on type, status, and search
   useEffect(() => {
@@ -202,6 +204,11 @@ export const AdminResourcesPage: React.FC = () => {
 
       setIsEditDialogOpen(false);
       setSelectedResource(null);
+      
+      // Trigger immediate data sync
+      triggerRefresh('resources');
+      await checkForUpdates();
+      
       toast({
         title: 'Succès',
         description: 'Ressource mise à jour',
@@ -228,6 +235,11 @@ export const AdminResourcesPage: React.FC = () => {
 
       setResources((prev) => prev.filter((r) => r._id !== id));
       setDeleteId(null);
+      
+      // Trigger immediate data sync
+      triggerRefresh('resources');
+      await checkForUpdates();
+      
       toast({
         title: 'Succès',
         description: 'Ressource supprimée',
@@ -454,7 +466,7 @@ export const AdminResourcesPage: React.FC = () => {
                         <div className="text-xs text-slate-500">{resource.createdBy?.email || resource.manager?.email || 'N/A'}</div>
                       </td>
                       <td className="px-4 py-4 text-sm font-semibold text-slate-900">
-                        {resource.pricePerUnit} {resource.currency}/h
+                        {resource.pricePerUnit} DH/h
                       </td>
                       <td className="px-4 py-4 text-sm">
                         <Badge

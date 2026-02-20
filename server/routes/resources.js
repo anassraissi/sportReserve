@@ -137,11 +137,24 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
     data.createdBy = req.user._id;
     data.managerId = req.user._id; // treat admin as owner
     
-    // Generate slug from name
+    // Generate unique slug from name
     if (!data.slug) {
-      data.slug = data.name.toLowerCase()
+      const baseSlug = data.name.toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');
+      
+      // Check if slug exists and make it unique
+      let slug = baseSlug;
+      let counter = 1;
+      let slugExists = await Resource.findOne({ slug });
+      
+      while (slugExists) {
+        slug = `${baseSlug}-${counter}`;
+        slugExists = await Resource.findOne({ slug });
+        counter++;
+      }
+      
+      data.slug = slug;
     }
 
     // Ensure required fields have defaults

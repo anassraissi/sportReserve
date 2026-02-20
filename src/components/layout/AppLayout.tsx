@@ -57,6 +57,38 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   };
 
   const isAdmin = user?.role === 'admin';
+  const navSizing = isAdmin
+    ? {
+        navGap: 'gap-0.5',
+        navPadding: 'p-2.5',
+        item: 'gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px]',
+        iconBox: 'h-8 w-8 rounded-md',
+        iconSize: 'h-3.5 w-3.5',
+        section: 'px-2.5 text-[9px] tracking-[0.18em] mb-0.5',
+        divider: 'my-2',
+      }
+    : {
+        navGap: 'gap-1.5',
+        navPadding: 'p-3',
+        item: 'gap-3 rounded-xl px-3 py-2.5 text-sm',
+        iconBox: 'h-9 w-9 rounded-lg',
+        iconSize: 'h-4 w-4',
+        section: 'px-3 text-[10px] tracking-[0.2em] mb-1',
+        divider: 'my-3',
+      };
+  const navItems = [
+    ...navigation,
+    ...(isAdmin
+      ? [
+          { name: 'Mes ressources', href: '/resources/my', icon: Dumbbell, emoji: '🧩' },
+          ...adminNavigation,
+        ]
+      : []),
+  ];
+  const activeItem = navItems.find(
+    (item) => location.pathname === item.href || location.pathname.startsWith(item.href + '/')
+  );
+  const pageTitle = activeItem?.name ?? 'Tableau de bord';
 
   return (
       <div className="min-h-screen">
@@ -69,42 +101,55 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         {/* Sidebar */}
         <aside
           className={cn(
-            'fixed inset-y-0 left-0 z-50 w-64 transform bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 border-r border-slate-700 transition-transform duration-200 ease-in-out lg:translate-x-0 flex flex-col',
+            'fixed inset-y-0 left-0 z-50 w-64 lg:w-64 transform bg-slate-950 border-r border-slate-800 transition-transform duration-200 ease-in-out lg:translate-x-0 flex flex-col',
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
           )}
         >
-          <div className="flex h-16 items-center justify-between px-6 border-b border-slate-700 bg-gradient-to-r from-blue-600 to-purple-600">
+          <div className="flex h-16 items-center justify-between px-4 border-b border-slate-800 bg-slate-950">
             <Link to="/dashboard" className="flex items-center gap-2">
-              <Calendar className="h-6 w-6 text-white" />
-              <span className="font-bold text-lg text-white">sportResrve</span>
+              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-blue-600 to-purple-600 text-white flex items-center justify-center font-display text-lg shadow-lg">
+                SR
+              </div>
+              <span className="font-display text-lg text-white">sportReserve</span>
             </Link>
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden text-white hover:bg-white/20"
+              className="lg:hidden text-white hover:bg-white/10"
               onClick={() => setSidebarOpen(false)}
             >
               <X className="h-5 w-5" />
             </Button>
           </div>
 
-          <nav className="flex flex-col gap-1 p-3 overflow-y-auto flex-1">
+          <nav className={cn('flex flex-col flex-1 overflow-hidden', navSizing.navGap, navSizing.navPadding)}>
             {navigation.map((item) => {
+              // Hide "Réservations" for admin users
+              if (isAdmin && item.name === 'Réservations') return null;
+              
               const isActive = location.pathname === item.href || location.pathname.startsWith(item.href + '/');
               return (
                 <Link
                   key={item.name}
                   to={item.href}
+                  title={item.name}
                   className={cn(
-                    'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+                    'group flex items-center font-medium transition-all duration-200',
+                    navSizing.item,
                     isActive
-                      ? 'bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/30'
-                      : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                      ? 'bg-white/10 text-white shadow-lg shadow-purple-500/30'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
                   )}
                   onClick={() => setSidebarOpen(false)}
                 >
-                  <span className="text-base">{item.emoji}</span>
-                  {item.name}
+                  <span className={cn(
+                    'flex items-center justify-center transition-colors',
+                    navSizing.iconBox,
+                    isActive ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white' : 'bg-slate-800 text-slate-200 group-hover:bg-slate-700'
+                  )}>
+                    <item.icon className={navSizing.iconSize} />
+                  </span>
+                  <span>{item.name}</span>
                 </Link>
               );
             })}
@@ -112,25 +157,35 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             {isAdmin && (
               <>
                 <div className="my-3 border-t border-slate-700" />
-                <p className="px-3 text-xs font-semibold uppercase text-slate-500 mb-1.5">
+                <p className={cn('font-semibold uppercase text-slate-500', navSizing.section)}>
                   🔧 Mes ressources
                 </p>
                 <Link
                   to="/resources/my"
+                  title="Mes ressources"
                   className={cn(
-                    'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+                    'group flex items-center font-medium transition-all duration-200',
+                    navSizing.item,
                     location.pathname === '/resources/my' || location.pathname.startsWith('/resources/') && (location.pathname.includes('/new') || location.pathname.includes('/edit') || location.pathname.includes('/media'))
-                      ? 'bg-gradient-to-r from-green-600 to-blue-600 text-white shadow-lg shadow-green-500/30'
-                      : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                      ? 'bg-white/10 text-white shadow-lg shadow-purple-500/30'
+                      : 'text-slate-300 hover:bg-white/5 hover:text-white'
                   )}
                   onClick={() => setSidebarOpen(false)}
                 >
-                  <span className="text-base">🧩</span>
-                  Mes ressources
+                  <span className={cn(
+                    'flex items-center justify-center transition-colors',
+                    navSizing.iconBox,
+                    location.pathname === '/resources/my' || location.pathname.startsWith('/resources/') && (location.pathname.includes('/new') || location.pathname.includes('/edit') || location.pathname.includes('/media'))
+                      ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white'
+                      : 'bg-slate-800 text-slate-200 group-hover:bg-slate-700'
+                  )}>
+                    <Dumbbell className={navSizing.iconSize} />
+                  </span>
+                  <span>Mes ressources</span>
                 </Link>
 
-                <div className="my-3 border-t border-slate-700" />
-                <p className="px-3 text-xs font-semibold uppercase text-slate-500 mb-1.5">
+                <div className={cn('border-t border-slate-700', navSizing.divider)} />
+                <p className={cn('font-semibold uppercase text-slate-500', navSizing.section)}>
                   ⚙️ Administration
                 </p>
                 {adminNavigation.map((item) => {
@@ -139,16 +194,24 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                     <Link
                       key={item.name}
                       to={item.href}
+                      title={item.name}
                       className={cn(
-                        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200',
+                        'group flex items-center font-medium transition-all duration-200',
+                        navSizing.item,
                         isActive
-                          ? 'bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg shadow-orange-500/30'
-                          : 'text-slate-300 hover:bg-slate-700/50 hover:text-white'
+                          ? 'bg-white/10 text-white shadow-lg shadow-purple-500/30'
+                          : 'text-slate-300 hover:bg-white/5 hover:text-white'
                       )}
                       onClick={() => setSidebarOpen(false)}
                     >
-                      <span className="text-base">{item.emoji}</span>
-                      {item.name}
+                      <span className={cn(
+                        'flex items-center justify-center transition-colors',
+                        navSizing.iconBox,
+                        isActive ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white' : 'bg-slate-800 text-slate-200 group-hover:bg-slate-700'
+                      )}>
+                        <item.icon className={navSizing.iconSize} />
+                      </span>
+                      <span>{item.name}</span>
                     </Link>
                   );
                 })}
@@ -160,7 +223,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         {/* Main content */}
         <div className="lg:pl-64">
           {/* Top header */}
-          <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-gradient-to-r from-slate-50 to-slate-100 border-slate-200 px-4 lg:px-6 shadow-md">
+          <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-white/80 backdrop-blur border-slate-200 px-4 lg:px-6 shadow-sm">
             <Button
               variant="ghost"
               size="icon"
@@ -170,7 +233,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               <Menu className="h-5 w-5" />
             </Button>
 
-            <div className="flex-1" />
+            <div className="flex items-center gap-3">
+              <div className="hidden lg:flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 text-white font-display text-base shadow-sm">
+                {pageTitle.slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <h1 className="font-display text-xl font-medium text-slate-900">{pageTitle}</h1>
+              </div>
+            </div>
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

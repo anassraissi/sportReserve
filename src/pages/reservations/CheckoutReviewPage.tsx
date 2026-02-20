@@ -9,6 +9,7 @@ import { bookingsAPI } from '@/lib/api';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { useDataSync } from '@/contexts/DataSyncContext';
 
 interface CheckoutReviewPageProps {}
 
@@ -16,6 +17,7 @@ export const CheckoutReviewPage: React.FC<CheckoutReviewPageProps> = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { triggerRefresh, checkForUpdates } = useDataSync();
 
   const [reservation, setReservation] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -59,14 +61,46 @@ export const CheckoutReviewPage: React.FC<CheckoutReviewPageProps> = () => {
     navigate(`/reservations/new?edit=${reservationId}`);
   };
 
-  const handleConfirmPayment = () => {
-    navigate(`/reservations/checkout?reservationId=${reservationId}`);
+  const handleConfirmPayment = async () => {
+    // STRIPE PAYMENT COMMENTED OUT - Using direct confirmation with 'not paid' status
+    try {
+      setIsConfirming(true);
+      // Update reservation status to 'confirmed' and set confirmation time
+      await bookingsAPI.update(reservationId, {
+        status: 'confirmed',
+        confirmedAt: new Date().toISOString(),
+      });
+      
+      // Trigger data sync for all pages
+      triggerRefresh('reservations');      await checkForUpdates();      
+      toast({
+        title: 'Réservation confirmée!',
+        description: 'Votre réservation a été confirmée. Le paiement pourra être effectué ultérieurement.',
+      });
+      // Redirect to success page after 1 second
+      setTimeout(() => {
+        navigate(`/reservations/success?reservationId=${reservationId}`);
+      }, 1000);
+    } catch (error: any) {
+      toast({
+        title: 'Erreur',
+        description: error.message || 'Impossible de confirmer la réservation.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsConfirming(false);
+    }
   };
 
   const handleCancel = async () => {
     try {
       setIsConfirming(true);
       await bookingsAPI.cancel(reservationId);
+      
+      // Trigger immediate data sync
+      triggerRefresh('reservations');
+      await checkForUpdates();
+      
       toast({
         title: 'Réservation annulée',
         description: 'Votre réservation a été annulée.',
@@ -242,7 +276,6 @@ export const CheckoutReviewPage: React.FC<CheckoutReviewPageProps> = () => {
               </div>
             </div>
 
-            {/* Price Summary */}
             <div>
               <Card className="sticky top-6 shadow-lg border-0">
                 <CardHeader className="bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
@@ -281,10 +314,18 @@ export const CheckoutReviewPage: React.FC<CheckoutReviewPageProps> = () => {
 
                   <Button
                     onClick={handleConfirmPayment}
+                    disabled={isConfirming}
                     className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-lg"
                     size="lg"
                   >
-                    💳 Procéder au paiement
+                    {isConfirming ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Confirmation en cours...
+                      </>
+                    ) : (
+                      <>✓ Confirmer la réservation</>
+                    )}
                   </Button>
 
                   <div className="pt-4 space-y-2 text-xs text-muted-foreground">

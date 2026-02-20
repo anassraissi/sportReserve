@@ -1,7 +1,8 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Star, MapPin } from 'lucide-react';
+import { Star, MapPin, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
@@ -18,6 +19,8 @@ interface ReviewCardProps {
       avatarUrl?: string;
     };
     userId?: {
+      _id?: string;
+      id?: string;
       firstName: string;
       lastName: string;
       avatarUrl?: string;
@@ -28,9 +31,11 @@ interface ReviewCardProps {
     };
     resourceId?: any;
   };
+  currentUserId?: string;
+  onDelete?: (reviewId: string) => void;
 }
 
-export const ReviewCard: React.FC<ReviewCardProps> = ({ review }) => {
+export const ReviewCard: React.FC<ReviewCardProps> = ({ review, currentUserId, onDelete }) => {
   // Get resource data from either reservation or direct resourceId
   const resourceData = review.reservation?.resourceId || review.resourceId;
   const resourceName = typeof resourceData === 'object' 
@@ -48,6 +53,9 @@ export const ReviewCard: React.FC<ReviewCardProps> = ({ review }) => {
     : 'Utilisateur anonyme';
   
   const userInitials = userData ? `${(userData.firstName?.[0] || '')}${(userData.lastName?.[0] || '')}` : '?';
+  const reviewId = review._id || review.id;
+  const ownerId = review.userId?._id || review.userId?.id || review.user?._id || review.user?.id;
+  const isOwner = Boolean(currentUserId && ownerId && currentUserId === ownerId);
   
   const renderStars = (rating: number) => {
     return (
@@ -129,9 +137,26 @@ export const ReviewCard: React.FC<ReviewCardProps> = ({ review }) => {
           </div>
 
           {/* Rating */}
-          <div className="flex items-center gap-2">
-            {renderStars(review.rating)}
-            <span className="text-sm font-semibold text-amber-600">{review.rating}/5</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {renderStars(review.rating)}
+              <span className="text-sm font-semibold text-amber-600">{review.rating}/5</span>
+            </div>
+            {isOwner && onDelete && reviewId && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2 text-red-600 border-red-200 hover:bg-red-50"
+                onClick={() => {
+                  if (window.confirm('Supprimer votre avis ? Cette action est irreversible.')) {
+                    onDelete(reviewId);
+                  }
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
 
           {/* Comment */}

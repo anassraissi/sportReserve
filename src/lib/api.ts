@@ -496,7 +496,8 @@ export const notificationsAPI = {
   },
 };
 
-// Reviews API
+// ===================================================
+// REVIEWS API
 export const reviewsAPI = {
   getAll: async (params?: {
     page?: number;

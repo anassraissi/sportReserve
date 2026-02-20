@@ -23,6 +23,7 @@ import { resourcesAPI, mediaAPI, reviewsAPI } from '@/lib/api';
 import { ReviewCard } from '@/components/reviews/ReviewCard';
 import { ResourceType } from '@/types/reservation';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getImageUrl } from '@/lib/utils';
 
@@ -36,12 +37,46 @@ export const ResourceDetailPage: React.FC = () => {
   const { type, id } = useParams<{ type: string; id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [resource, setResource] = useState<any>(null);
   const [mediaAssets, setMediaAssets] = useState<any[]>([]);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [reviews, setReviews] = useState<any[]>([]);
   const [reviewStats, setReviewStats] = useState({ averageRating: 0, totalReviews: 0 });
+
+  const updateReviewStats = (items: any[]) => {
+    if (items.length > 0) {
+      const avgRating = (items.reduce((sum: number, r: any) => sum + r.rating, 0) / items.length).toFixed(1);
+      setReviewStats({
+        averageRating: parseFloat(avgRating),
+        totalReviews: items.length,
+      });
+    } else {
+      setReviewStats({ averageRating: 0, totalReviews: 0 });
+    }
+  };
+
+  const handleDeleteReview = async (reviewId: string) => {
+    try {
+      await reviewsAPI.delete(reviewId);
+      setReviews((prev) => {
+        const next = prev.filter((r) => (r._id || r.id) !== reviewId);
+        updateReviewStats(next);
+        return next;
+      });
+      toast({
+        title: 'Avis supprime',
+        description: 'Votre avis a ete supprime avec succes.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Erreur',
+        description: 'Impossible de supprimer votre avis.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   useEffect(() => {
     const loadResource = async () => {
@@ -58,14 +93,7 @@ export const ResourceDetailPage: React.FC = () => {
         // Load and process reviews
         const resourceReviews = reviewsRes.reviews || [];
         setReviews(resourceReviews);
-        
-        if (resourceReviews.length > 0) {
-          const avgRating = (resourceReviews.reduce((sum: number, r: any) => sum + r.rating, 0) / resourceReviews.length).toFixed(1);
-          setReviewStats({
-            averageRating: parseFloat(avgRating),
-            totalReviews: resourceReviews.length,
-          });
-        }
+        updateReviewStats(resourceReviews);
       } catch (error: any) {
         console.error('Error loading resource:', error);
         toast({
@@ -343,7 +371,12 @@ export const ResourceDetailPage: React.FC = () => {
                 <CardContent>
                   <div className="space-y-4 max-h-[600px] overflow-y-auto">
                     {reviews.slice(0, 5).map((review) => (
-                      <ReviewCard key={review._id || review.id} review={review} />
+                      <ReviewCard
+                        key={review._id || review.id}
+                        review={review}
+                        currentUserId={user?.id}
+                        onDelete={handleDeleteReview}
+                      />
                     ))}
                   </div>
                 </CardContent>
