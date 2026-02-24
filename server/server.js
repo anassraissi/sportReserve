@@ -75,7 +75,11 @@ app.use('/uploads', (req, res, next) => {
 // Database connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/flow-forge';
 mongoose.connect(MONGODB_URI)
-  .then(() => console.log('✅ Connected to MongoDB'))
+  .then(() => {
+    console.log('✅ Connected to MongoDB');
+    // Initialize scheduled jobs after DB connection
+    initializeScheduledJobs(app);
+  })
   .catch((err) => console.error('❌ MongoDB connection error:', err));
 
 // Socket.IO connection handling
@@ -103,6 +107,7 @@ import bookingRoutes from './routes/bookings.js';
 import mediaRoutes from './routes/media.js';
 import notificationRoutes from './routes/notifications.js';
 import reviewRoutes from './routes/reviews.js';
+import { initializeScheduledJobs } from './jobs/scheduledJobs.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/resources', resourceRoutes);

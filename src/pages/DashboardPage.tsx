@@ -52,6 +52,8 @@ import { getImageUrl } from '@/lib/utils';
 import { ReservationTicket } from '@/components/reservations/ReservationTicket';
 import { ReviewModal } from '@/components/reviews/ReviewModal';
 import { ReviewCard } from '@/components/reviews/ReviewCard';
+import { ReservationCalendar } from '@/components/dashboard/ReservationCalendar';
+import { AdminBroadcastNotification } from '@/components/notifications/AdminBroadcast';
 
 const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'];
 const RESOURCE_TYPE_COLORS: Record<string, string> = {
@@ -382,7 +384,98 @@ export const DashboardPage: React.FC = () => {
   return (
     <AppLayout>
       <div className="space-y-8">
-        {/* Smart AI Recommendations Section - TOP */}
+        {/* User Greeting Section - TOP */}
+        {user?.role !== 'admin' && (
+          <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/85 backdrop-blur p-6 lg:p-8">
+            <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-orange-200/60 blur-3xl" />
+            <div className="absolute -left-20 bottom-0 h-48 w-48 rounded-full bg-emerald-200/50 blur-3xl" />
+
+            <div className="relative grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+              <div className="space-y-5">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-16 w-16 border-2 border-slate-900 shadow-lg">
+                    <AvatarImage 
+                      src={user?.avatarUrl 
+                        ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : `http://localhost:5000${user.avatarUrl}`)
+                        : undefined
+                      } 
+                    />
+                    <AvatarFallback className="bg-gradient-to-br from-orange-500 to-yellow-300 text-slate-900 text-lg font-bold">
+                      {user?.firstName?.[0]}{user?.lastName?.[0]}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <h1 className="font-display text-3xl font-medium text-slate-900">Salut, {user?.firstName}</h1>
+                    <p className="text-slate-600">Tes terrains t'attendent. Fais ton prochain move.</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Actives</p>
+                    <p className="text-2xl font-semibold text-slate-900">{stats.activeReservations}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Total</p>
+                    <p className="text-2xl font-semibold text-slate-900">{stats.totalReservations}</p>
+                  </div>
+                  <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Disponibles</p>
+                    <p className="text-2xl font-semibold text-slate-900">{stats.terrains + stats.salles + stats.equipment}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-3">
+                  <Button asChild className="bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/30">
+                    <Link to="/reservations/new">
+                      <CalendarPlus className="h-4 w-4 mr-2" />
+                      Réserver maintenant
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" className="border-slate-300 bg-white/90">
+                    <Link to="/resources/terrains">
+                      Explorer les ressources
+                      <ArrowRight className="h-4 w-4 ml-2" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Prochaine session</p>
+                  <Badge variant="secondary" className="bg-orange-100 text-orange-700">Focus</Badge>
+                </div>
+                {nextReservation ? (
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                        <Clock className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-900">
+                          {typeof nextReservation.resourceId === 'object' ? nextReservation.resourceId.name : 'Ressource'}
+                        </p>
+                        <p className="text-sm text-slate-500">
+                          {format(new Date(nextReservation.startTime), 'PPp', { locale: fr })}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      {getStatusBadge(nextReservation.status)}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
+                    Aucune reservation prevue. Choisis ton prochain terrain.
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Smart AI Recommendations Section */}
         {user?.role !== 'admin' && recommendations.length > 0 && (
           <div className="relative">
             {/* Animated background */}
@@ -613,106 +706,23 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
 
-        {user?.role !== 'admin' ? (
-          <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/85 backdrop-blur p-6 lg:p-8">
-            <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-orange-200/60 blur-3xl" />
-            <div className="absolute -left-20 bottom-0 h-48 w-48 rounded-full bg-emerald-200/50 blur-3xl" />
+        {user?.role !== 'admin' && (
+          <>
+          {/* Reservation Calendar */}
+          <div className="mt-8">
+            <ReservationCalendar 
+              reservations={reservations}
+              isAdminView={false}
+              onDateClick={(date) => {
+                console.log('Date clicked:', date);
+              }}
+            />
+          </div>
+          </>
+        )}
 
-            <div className="relative grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-              <div className="space-y-5">
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16 border-2 border-slate-900 shadow-lg">
-                    <AvatarImage 
-                      src={user?.avatarUrl 
-                        ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : `http://localhost:5000${user.avatarUrl}`)
-                        : undefined
-                      } 
-                    />
-                    <AvatarFallback className="bg-gradient-to-br from-orange-500 to-yellow-300 text-slate-900 text-lg font-bold">
-                      {user?.firstName?.[0]}{user?.lastName?.[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <h1 className="font-display text-3xl font-medium text-slate-900">Salut, {user?.firstName}</h1>
-                    <p className="text-slate-600">Tes terrains t'attendent. Fais ton prochain move.</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Actives</p>
-                    <p className="text-2xl font-semibold text-slate-900">{stats.activeReservations}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Total</p>
-                    <p className="text-2xl font-semibold text-slate-900">{stats.totalReservations}</p>
-                  </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Disponibles</p>
-                    <p className="text-2xl font-semibold text-slate-900">{stats.terrains + stats.salles + stats.equipment}</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <Button asChild className="bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/30">
-                    <Link to="/reservations/new">
-                      <CalendarPlus className="h-4 w-4 mr-2" />
-                      Réserver maintenant
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" className="border-slate-300 bg-white/90">
-                    <Link to="/resources/terrains">
-                      Explorer les ressources
-                      <ArrowRight className="h-4 w-4 ml-2" />
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Prochaine session</p>
-                  <Badge variant="secondary" className="bg-orange-100 text-orange-700">Focus</Badge>
-                </div>
-                {nextReservation ? (
-                  <div className="mt-4 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                        <Clock className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-900">
-                          {typeof nextReservation.resourceId === 'object' ? nextReservation.resourceId.name : 'Ressource'}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          {format(new Date(nextReservation.startTime), 'PPp', { locale: fr })}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      {getStatusBadge(nextReservation.status)}
-                      {/* <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-slate-300"
-                        onClick={() => {
-                          setSelectedReservation(nextReservation);
-                          setIsTicketOpen(true);
-                        }}
-                      >
-                        Voir ticket
-                      </Button> */}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-                    Aucune reservation prevue. Choisis ton prochain terrain.
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-        ) : (
+        {user?.role === 'admin' && (
+          <>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white/80 backdrop-blur-sm p-6 rounded-lg border border-blue-100">
             <div className="flex items-center gap-4">
               <Avatar className="h-16 w-16 border-2 border-blue-600 shadow-md">
@@ -742,6 +752,28 @@ export const DashboardPage: React.FC = () => {
               </Link>
             </Button>
           </div>
+
+          {/* Admin Broadcast Notification */}
+          <div className="mt-6">
+            <AdminBroadcastNotification />
+          </div>
+
+          {/* Admin Broadcast Notification */}
+          <div className="mt-6">
+            <AdminBroadcastNotification />
+          </div>
+
+          {/* Admin Reservation Calendar */}
+          <div className="mt-8">
+            <ReservationCalendar 
+              reservations={reservations}
+              isAdminView={true}
+              onDateClick={(date) => {
+                console.log('Date clicked:', date);
+              }}
+            />
+          </div>
+          </>
         )}
 
         {user?.role === 'admin' && reviews.length > 0 && (

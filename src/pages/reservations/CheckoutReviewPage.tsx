@@ -61,6 +61,11 @@ export const CheckoutReviewPage: React.FC<CheckoutReviewPageProps> = () => {
     navigate(`/reservations/new?edit=${reservationId}`);
   };
 
+  const handleGoToPayment = () => {
+    // Redirect to payment page with card form
+    navigate(`/reservations/checkout?reservationId=${reservationId}`);
+  };
+
   const handleConfirmPayment = async () => {
     // STRIPE PAYMENT COMMENTED OUT - Using direct confirmation with 'not paid' status
     try {
@@ -75,12 +80,12 @@ export const CheckoutReviewPage: React.FC<CheckoutReviewPageProps> = () => {
       triggerRefresh('reservations');      await checkForUpdates();      
       toast({
         title: 'Réservation confirmée!',
-        description: 'Votre réservation a été confirmée. Le paiement pourra être effectué ultérieurement.',
+        description: 'Veuillez passer à l\'étape de paiement.',
       });
-      // Redirect to success page after 1 second
+      // Redirect to payment page
       setTimeout(() => {
-        navigate(`/reservations/success?reservationId=${reservationId}`);
-      }, 1000);
+        navigate(`/reservations/checkout?reservationId=${reservationId}`);
+      }, 500);
     } catch (error: any) {
       toast({
         title: 'Erreur',
@@ -324,7 +329,7 @@ export const CheckoutReviewPage: React.FC<CheckoutReviewPageProps> = () => {
                         Confirmation en cours...
                       </>
                     ) : (
-                      <>✓ Confirmer la réservation</>
+                      <>💳 Continuer vers le paiement</>
                     )}
                   </Button>
 

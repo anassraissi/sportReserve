@@ -4,6 +4,12 @@ import Reservation from '../models/Reservation.js';
 import Resource from '../models/Resource.js';
 import ResourceAvailability from '../models/ResourceAvailability.js';
 import { authenticate } from '../middleware/auth.js';
+import {
+  sendReservationConfirmation,
+  sendReservationCancellation,
+  sendReservationReminder,
+  sendPaymentConfirmation,
+} from '../utils/notificationService.js';
 
 const router = express.Router();
 
@@ -189,6 +195,10 @@ router.post('/', authenticate, [
     await reservation.populate('resourceId', 'name type');
     await reservation.populate('userId', 'firstName lastName email');
 
+    // NOTE: Confirmation email will be sent AFTER payment is processed
+    // Do NOT send confirmation here - status is still "pending"
+    console.log(`[Booking] Reservation created with status: pending. Email will be sent after payment.`);
+
     res.status(201).json({ message: 'Reservation created', reservation });
   } catch (error) {
     console.error('Create booking error:', error);
@@ -231,6 +241,25 @@ router.put('/:id', authenticate, async (req, res) => {
     // Check access
     if (req.user.role === 'user' && reservation.userId.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Access denied' });
+    }
+
+    // Prevent TIME modifications within 24 hours before reservation start time
+    // Allow status changes (confirm, payment, etc.) anytime
+    const fieldsToCheckRestriction = ['startTime', 'endTime', 'title', 'description', 'attendeesCount', 'specialRequests', 'setupRequirements'];
+    const isModifyingRestrictedFields = fieldsToCheckRestriction.some(field => field in req.body);
+
+    if (isModifyingRestrictedFields) {
+      const now = new Date();
+      const reservationStart = new Date(reservation.startTime);
+      const hoursUntilReservation = (reservationStart - now) / (1000 * 60 * 60);
+
+      if (hoursUntilReservation < 24 && reservation.status !== 'cancelled') {
+        return res.status(403).json({ 
+          message: 'Cannot modify reservation details within 24 hours before start time',
+          hoursRemaining: Math.round(hoursUntilReservation * 10) / 10,
+          restrictedUntil: new Date(reservationStart.getTime() - 24 * 60 * 60 * 1000).toISOString()
+        });
+      }
     }
 
     // If updating times, check availability
@@ -299,6 +328,16 @@ router.post('/:id/cancel', authenticate, [
     reservation.cancellationReason = req.body.reason;
 
     await reservation.save();
+
+    // Send cancellation notification
+    try {
+      const populatedReservation = await Reservation.findById(reservation._id)
+        .populate('resourceId')
+        .populate('userId');
+      await sendReservationCancellation(populatedReservation, req.body.reason);
+    } catch (notificationError) {
+      console.error('Notification error:', notificationError);
+    }
 
     res.json({ message: 'Reservation cancelled', reservation });
   } catch (error) {
@@ -401,6 +440,24 @@ router.post('/:id/payment', authenticate, async (req, res) => {
     reservation.paymentId = 'PAY_' + Date.now();
 
     await reservation.save();
+
+    // Send BOTH confirmation and payment emails after successful payment
+    try {
+      const populatedReservation = await Reservation.findById(reservation._id)
+        .populate('resourceId')
+        .populate('userId');
+      
+      // Send reservation confirmation email
+      await sendReservationConfirmation(populatedReservation);
+      console.log(`[Payment] ✅ Reservation confirmation email sent for reservation ${reservation._id}`);
+      
+      // Send payment confirmation email with address and details
+      await sendPaymentConfirmation(populatedReservation);
+      console.log(`[Payment] ✅ Payment confirmation email sent for reservation ${reservation._id}`);
+    } catch (notificationError) {
+      console.error(`[Payment] ❌ Notification error for reservation ${reservation._id}:`, notificationError.message);
+      // Don't fail the request due to notification issues
+    }
 
     res.json({
       success: true,

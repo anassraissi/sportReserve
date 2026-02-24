@@ -22,7 +22,7 @@ import {
   Lightbulb
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { resourcesAPI, bookingsAPI } from '@/lib/api';
 import { 
@@ -54,7 +54,22 @@ export const ChatBot: React.FC = () => {
   const [searchContext, setSearchContext] = useState<{type?: string; date?: string; time?: string}>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
+
+  const getPageContext = () => {
+    const pathname = location.pathname;
+    if (pathname.includes('/login')) return 'login';
+    if (pathname.includes('/register')) return 'register';
+    if (pathname.includes('/reservations')) return 'reservations';
+    if (pathname.includes('/resources')) return 'resources';
+    if (pathname.includes('/dashboard')) return 'dashboard';
+    if (pathname.includes('/admin')) return 'admin';
+    if (pathname.includes('/profile')) return 'profile';
+    return 'general';
+  };
+
+  const currentPageContext = getPageContext();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -93,30 +108,77 @@ export const ChatBot: React.FC = () => {
   };
 
   const sendWelcomeMessage = () => {
-    let welcomeText = `Bonjour ${user?.firstName}! 👋 Je suis votre assistant SportReserve. Comment puis-je vous aider?`;
-    
-    if (bookingPattern && userBookings.length > 0) {
-      const personalizedMsg = generatePersonalizedMessage(bookingPattern, user?.firstName || 'Ami');
-      welcomeText = `Bonjour ${user?.firstName}! 👋\n\n${personalizedMsg}\n\nSouhaitez-vous réserver une ressource similaire ou découvrir nos recommandations?`;
+    let welcomeText = '';
+    let suggestions: string[] = [];
+
+    // Page-specific welcome messages
+    if (currentPageContext === 'login') {
+      welcomeText = `Bonjour! 👋\n\nBienvenue sur SportReserve. Je suis votre assistant.\nAvez-vous besoin d'aide pour vous connecter?`;
+      suggestions = [
+        "🔑 J'ai oublié mon mot de passe",
+        "❓ Aide de connexion",
+        "🆕 Créer un compte",
+        "❓ Questions fréquentes"
+      ];
+    } else if (currentPageContext === 'register') {
+      welcomeText = `Bienvenue sur SportReserve! 🎉\n\nJe suis votre assistant. Puis-je vous aider pour l'inscription?`;
+      suggestions = [
+        "📝 Guide d'inscription",
+        "❓ Questions sur l'inscription",
+        "🔒 Sécurité des données",
+        "💬 Déjà un compte? Se connecter"
+      ];
+    } else if (currentPageContext === 'reservations') {
+      welcomeText = `Bienvenue dans vos réservations! 📅\n\nComment puis-je vous aider avec vos réservations?`;
+      suggestions = [
+        "📋 Mes réservations",
+        "➕ Nouvelle réservation",
+        "❌ Annuler une réservation",
+        "📅 Historique"
+      ];
+    } else if (currentPageContext === 'resources') {
+      welcomeText = `Explorez nos ressources! 🏟️\n\nQu'est-ce que vous cherchez?`;
+      suggestions = [
+        "🏟️ Terrains de sport",
+        "🏛️ Salles de sport",
+        "💪 Équipements",
+        "💰 Voir les tarifs"
+      ];
+    } else if (currentPageContext === 'dashboard') {
+      welcomeText = `Bonjour ${user?.firstName}! 👋\n\nBienvenue sur votre tableau de bord. Comment puis-je vous aider?`;
+      suggestions = [
+        "📅 Réserver une ressource",
+        "📋 Mes réservations",
+        "💡 Recommandations",
+        "📊 Statistiques"
+      ];
+    } else if (currentPageContext === 'profile') {
+      welcomeText = `Gérez votre profil! 👤\n\nComment puis-je vous aider?`;
+      suggestions = [
+        "👤 Modifier le profil",
+        "🔐 Changer le mot de passe",
+        "📧 Vérifier email",
+        "⚙️ Paramètres"
+      ];
+    } else if (currentPageContext === 'admin') {
+      welcomeText = `Tableau d'administration! 👨‍💼\n\nBienvenue administrateur. Comment puis-je vous aider?`;
+      suggestions = [
+        "👥 Gérer utilisateurs",
+        "📅 Gérer réservations",
+        "🏟️ Gérer ressources",
+        "📊 Rapport"
+      ];
+    } else {
+      welcomeText = `Bonjour! 👋\n\nJe suis votre assistant SportReserve. Comment puis-je vous aider?`;
+      suggestions = [
+        "🏟️ Chercher un terrain",
+        "🏛️ Chercher une salle",
+        "💪 Équipements",
+        "📅 Comment réserver?"
+      ];
     }
 
-    addBotMessage(
-      welcomeText,
-      userBookings.length > 0 
-        ? [
-            "💡 Voir mes recommandations",
-            "📋 Mes réservations",
-            "🔄 Réserver le même",
-            "🏟️ Explorer nouveautés"
-          ]
-        : [
-          "🏟️ Je cherche un terrain",
-          "🏛️ Je veux une salle",
-          "💪 Équipement",
-          "📅 Comment réserver?",
-          "💰 Tarifs"
-        ]
-    );
+    addBotMessage(welcomeText, suggestions);
   };
 
   const addBotMessage = (text: string, suggestions?: string[], resourceLink?: { type: string; name: string }, resources?: any[]) => {
@@ -173,6 +235,277 @@ export const ChatBot: React.FC = () => {
 
   const getBotResponse = async (userInput: string): Promise<{ text: string; suggestions?: string[]; resources?: any[] }> => {
     const input = userInput.toLowerCase();
+
+    // ===== LOGIN PAGE HELP =====
+    if (currentPageContext === 'login') {
+      if (input.includes('oublié') || input.includes('mot de passe') || input.includes('password')) {
+        return {
+          text: "🔑 Pour réinitialiser votre mot de passe:\n\n1. Cliquez sur \"Mot de passe oublié?\"\n2. Entrez votre adresse email\n3. Vérifiez votre email\n4. Cliquez sur le lien reçu\n5. Créez un nouveau mot de passe\n\nAvez-vous reçu l'email?",
+          suggestions: [
+            "✅ Oui, j'ai reçu l'email",
+            "❌ Je n'ai pas reçu l'email",
+            "📧 Autres problèmes"
+          ]
+        };
+      }
+
+      if (input.includes('compte') || input.includes('inscription') || input.includes('créer')) {
+        return {
+          text: "🆕 Vous n'avez pas encore de compte? Pas de problème!\n\nCliquez sur \"Créer un compte\" pour vous inscrire. C'est facile et rapide!",
+          suggestions: [
+            "➡️ Aller à l'inscription",
+            "📝 Qu'est-ce qui est nécessaire?",
+            "🔒 Vos données seront-elles sûres?"
+          ]
+        };
+      }
+
+      if (input.includes('google') || input.includes('github')) {
+        return {
+          text: "🔐 Vous pouvez vous connecter rapidement avec:\n\n🔵 Google - Authentification simple et sécurisée\n📱 Avec votre compte Google existant\n\nCliquez simplement sur le bouton \"Connexion avec Google\"",
+          suggestions: [
+            "✓ Je comprends",
+            "❓ Comment fonctionne Google Login?",
+            "📧 Connexion par email"
+          ]
+        };
+      }
+
+      if (input.includes('aide') || input.includes('problème') || input.includes('probleme')) {
+        return {
+          text: "❓ Problèmes courants de connexion:\n\n❌ Email ou mot de passe incorrect?\n   → Vérifiez la majuscule/minuscule\n\n❌ Compte non approuvé?\n   → Attendez l'approbation admin\n\n❌ Erreur technique?\n   → Videz le cache de votre navigateur\n\nPouvez-vous me donner plus de détails?",
+          suggestions: [
+            "🔑 Aide mot de passe",
+            "✅ Approbation du compte",
+            "🔄 Effacer le cache",
+            "📞 Contacter support"
+          ]
+        };
+      }
+
+      return {
+        text: "📝 Pour vous connecter:\n\n1. Entrez votre email\n2. Entrez votre mot de passe\n3. Cliquez sur \"Se connecter\"\n\nOu utilisez Google pour une connexion rapide!",
+        suggestions: [
+          "🔑 Mot de passe oublié?",
+          "🆕 Pas de compte?",
+          "❓ Aide"
+        ]
+      };
+    }
+
+    // ===== REGISTER PAGE HELP =====
+    if (currentPageContext === 'register') {
+      if (input.includes('nom') || input.includes('prénom') || input.includes('email') || input.includes('informations')) {
+        return {
+          text: "📝 Informations requises:\n\n✓ Prénom\n✓ Nom\n✓ Email valide\n✓ Mot de passe sécurisé\n✓ Confirmation du mot de passe\n\nTous les champs sont obligatoires.",
+          suggestions: [
+            "🔐 Conseil mot de passe",
+            "✅ Conditions générales",
+            "📧 Vérification email"
+          ]
+        };
+      }
+
+      if (input.includes('mot de passe') || input.includes('password') || input.includes('sécurisé')) {
+        return {
+          text: "🔐 Conseils pour un mot de passe sécurisé:\n\n✓ Au moins 8 caractères\n✓ Lettres majuscules et minuscules\n✓ Chiffres et symboles\n✓ Ne pas utiliser d'infos personnelles\n\nExemple: SportRe2024@Secure",
+          suggestions: [
+            "✓ J'ai créé un mot de passe",
+            "📝 Autres questions",
+            "➡️ Continuer l'inscription"
+          ]
+        };
+      }
+
+      if (input.includes('accord') || input.includes('conditions') || input.includes('confidentialité')) {
+        return {
+          text: "✅ Conditions d'utilisation:\n\n📋 En vous inscrivant, vous acceptez:\n\n• Notre politique de confidentialité\n• Les conditions générales d'utilisation\n• Stockage sécurisé de vos données\n\nVos données sont protégées et chiffrées.",
+          suggestions: [
+            "✓ Je suis d'accord",
+            "📄 Lire les conditions",
+            "🔒 Politique de confidentialité"
+          ]
+        };
+      }
+
+      if (input.includes('vérif') || input.includes('email') || input.includes('confirme')) {
+        return {
+          text: "📧 Vérification d'email:\n\n1. Vous recevrez un email après l'inscription\n2. Cliquez sur le lien de vérification\n3. Votre compte sera activé\n4. Vous pourrez vous connecter\n\nL'email arrive généralement en quelques minutes.",
+          suggestions: [
+            "✓ Compris",
+            "❌ Je n'ai pas reçu l'email",
+            "⏱️ Renvoyer l'email"
+          ]
+        };
+      }
+
+      if (input.includes('google') || input.includes('rapide')) {
+        return {
+          text: "⚡ Inscription rapide avec Google:\n\n1. Utilisez votre compte Google\n2. Vos informations sont remplies automatiquement\n3. Plus rapide et sécurisé\n\nCliquez sur \"S'inscrire avec Google\"",
+          suggestions: [
+            "✓ Je comprends",
+            "📝 Inscription manuelle",
+            "🔒 Sécurité"
+          ]
+        };
+      }
+
+      return {
+        text: "🎉 Bienvenue sur SportReserve!\n\n📝 Remplissez le formulaire:\n\n1. Vos informations (prénom, nom, email)\n2. Créez un mot de passe sécurisé\n3. Acceptez les conditions\n4. Cliquez \"S'inscrire\"\n\nC'est tout! 🚀",
+        suggestions: [
+          "📝 Qu'est-ce qui est obligatoire?",
+          "🔐 Sécurité du mot de passe",
+          "✅ Conditions générales"
+        ]
+      };
+    }
+
+    // ===== RESERVATIONS PAGE HELP =====
+    if (currentPageContext === 'reservations') {
+      if (input.includes('réservation') || input.includes('mes') || input.includes('voir')) {
+        if (userBookings.length > 0) {
+          const upcomingBooking = userBookings.find(b => new Date(b.startTime) > new Date());
+          return {
+            text: `📋 Vous avez ${userBookings.length} réservation(s)\n\n${upcomingBooking ? `Prochaine:\n🏟️ ${upcomingBooking.resourceId?.name || 'Ressource'}\n📅 ${new Date(upcomingBooking.startTime).toLocaleDateString('fr-FR')} à ${new Date(upcomingBooking.startTime).toLocaleTimeString('fr-FR')}` : 'Aucune réservation prochaine.'}`,
+            suggestions: [
+              "➕ Nouvelle réservation",
+              "❌ Annuler une réservation",
+              "📝 Ajouter une note",
+              "📞 Contacter support"
+            ]
+          };
+        }
+      }
+
+      if (input.includes('nouveau') || input.includes('nouvelle') || input.includes('réserver')) {
+        return {
+          text: "➕ Pour faire une nouvelle réservation:\n\n1. Choisissez une ressource (terrain, salle, équipement)\n2. Sélectionnez la date et l'heure\n3. Vérifiez les détails\n4. Confirmez et payez\n\nRapide et facile! ⚡",
+          suggestions: [
+            "🏟️ Chercher un terrain",
+            "🏛️ Chercher une salle",
+            "💪 Chercher équipement",
+            "📅 Voir mon calendrier"
+          ]
+        };
+      }
+
+      if (input.includes('annul') || input.includes('cancel')) {
+        return {
+          text: "❌ Annulation de réservation:\n\n1. Allez à \"Mes réservations\"\n2. Cliquez sur la réservation\n3. Cliquez \"Annuler\"\n4. Confirmez l'annulation\n\n💰 Remboursement selon les conditions",
+          suggestions: [
+            "📋 Voir mes réservations",
+            "📋 Politique d'annulation",
+            "💰 Conditions de remboursement",
+            "📞 Support"
+          ]
+        };
+      }
+
+      return {
+        text: "📅 Gérez vos réservations:\n\n✓ Voir l'historique\n✓ Faire une nouvelle réservation\n✓ Modifier ou annuler\n✓ Ajouter des notes\n\nComment puis-je vous aider?",
+        suggestions: [
+          "📋 Mes réservations",
+          "➕ Nouvelle réservation",
+          "❌ Annuler",
+          "❓ Aide"
+        ]
+      };
+    }
+
+    // ===== RESOURCES PAGE HELP =====
+    if (currentPageContext === 'resources') {
+      if (input.includes('terrain') || input.includes('foot') || input.includes('basket')) {
+        return {
+          text: "🏟️ Terrains de sport disponibles!",
+          suggestions: [
+            "📅 Vérifier disponibilité",
+            "💰 Voir les prix",
+            "🔍 Plus de détails",
+            "🏛️ Voir salles"
+          ]
+        };
+      }
+
+      if (input.includes('salle') || input.includes('fitness') || input.includes('gym')) {
+        return {
+          text: "🏛️ Salles de sport modernes!",
+          suggestions: [
+            "📅 Horaires",
+            "💪 Équipements",
+            "💰 Tarification",
+            "🏟️ Voir terrains"
+          ]
+        };
+      }
+
+      if (input.includes('équipement') || input.includes('materiel')) {
+        return {
+          text: "💪 Équipements disponibles à la location!",
+          suggestions: [
+            "🔍 Voir tous",
+            "💰 Tarifs",
+            "📦 Types d'équipements",
+            "🏟️ Réservations"
+          ]
+        };
+      }
+
+      if (input.includes('prix') || input.includes('tarif') || input.includes('cout')) {
+        return {
+          text: "💰 Nos tarifs:\n\n🏟️ Terrains: À partir de 100 DH/heure\n🏛️ Salles: À partir de 200 DH/heure\n💪 Équipements: À partir de 20 DH/jour\n\nDécouvrez nos offres spéciales!",
+          suggestions: [
+            "🎁 Offres spéciales",
+            "📆 Abonnements",
+            "💳 Moyens de paiement",
+            "📞 Devis personnalisé"
+          ]
+        };
+      }
+
+      return {
+        text: "🏟️ Bienvenue! Qu'est-ce que vous cherchez?",
+        suggestions: [
+          "🏟️ Terrains",
+          "🏛️ Salles",
+          "💪 Équipements",
+          "💰 Tarifs & Offres"
+        ]
+      };
+    }
+
+    // ===== DASHBOARD PAGE HELP =====
+    if (currentPageContext === 'dashboard') {
+      if (input.includes('recommandation') || input.includes('suggestion')) {
+        if (bookingPattern && allResources.length > 0) {
+          const recommendations = getRecommendations(bookingPattern, allResources, userBookings);
+          const trending = getTrendingResources(allResources, bookingPattern);
+          
+          const resourcesToShow = trending.length > 0 ? trending : recommendations;
+          
+          if (resourcesToShow.length > 0) {
+            return {
+              text: `🌟 Recommandations personnalisées basées sur votre historique!`,
+              suggestions: [
+                "📍 Voir plus",
+                "🔄 Autres suggestions",
+                "💬 Réserver"
+              ],
+              resources: resourcesToShow.slice(0, 3)
+            };
+          }
+        }
+      }
+
+      return {
+        text: `Bienvenue ${user?.firstName}! 👋\n\nVotre tableau de bord SportReserve\n\nQue souhaitez-vous faire?`,
+        suggestions: [
+          "📅 Nouvelle réservation",
+          "📋 Mes réservations",
+          "💡 Recommandations",
+          "🏟️ Explorer ressources"
+        ]
+      };
+    }
 
     // Recommendations based on history
     if (input.includes('recommandation') || input.includes('suggestion') || input.includes('💡')) {

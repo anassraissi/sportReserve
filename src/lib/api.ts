@@ -494,6 +494,53 @@ export const notificationsAPI = {
       method: 'DELETE',
     });
   },
+
+  broadcastAll: async (data: {
+    title: string;
+    message: string;
+    type?: string;
+    channels?: string[];
+    userRole?: string;
+  }) => {
+    return apiRequest<{ message: string; count: number; notifications: any[] }>(
+      '/notifications/broadcast/all',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+  },
+
+  sendToUser: async (userId: string, data: {
+    title: string;
+    message: string;
+    type?: string;
+    channels?: string[];
+  }) => {
+    return apiRequest<{ message: string; notifications: any[] }>(
+      `/notifications/send/${userId}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+  },
+
+  create: async (data: {
+    userId: string;
+    title: string;
+    message: string;
+    type?: string;
+    channel?: string;
+  }) => {
+    return apiRequest<{ message: string; notification: any }>(
+      '/notifications',
+      {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }
+    );
+  },
 };
 
 // ===================================================

@@ -25,6 +25,7 @@ import {
   Star,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -242,7 +243,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               </div>
             </div>
 
-            <DropdownMenu>
+            <div className="flex items-center gap-3">
+              <NotificationCenter />
+              <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2 hover:bg-slate-200">
                   <Avatar className="h-8 w-8 border-2 border-blue-600">
@@ -287,6 +290,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </header>
 
           {/* Page content */}
