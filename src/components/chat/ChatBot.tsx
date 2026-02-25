@@ -236,6 +236,68 @@ export const ChatBot: React.FC = () => {
   const getBotResponse = async (userInput: string): Promise<{ text: string; suggestions?: string[]; resources?: any[] }> => {
     const input = userInput.toLowerCase();
 
+    const isWeatherQuestion = /meteo|m[eé]t[eé]o|weather|temps|pluie|vent|temperature|conditions/.test(input);
+    if (isWeatherQuestion) {
+      if (!userBookings || userBookings.length === 0) {
+        return {
+          text: "🌦️ Je peux vous conseiller sur la meteo, mais je ne vois pas encore de reservation a venir. Souhaitez-vous en creer une?",
+          suggestions: [
+            "➕ Nouvelle reservation",
+            "📋 Mes reservations",
+            "🏟️ Trouver une ressource",
+          ],
+        };
+      }
+
+      const upcoming = userBookings
+        .filter((b) => new Date(b.startTime) > new Date())
+        .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+      if (upcoming.length === 0) {
+        return {
+          text: "🌦️ Vous n'avez pas de reservation a venir. Je peux vous conseiller si vous planifiez un nouveau creneau.",
+          suggestions: [
+            "➕ Nouvelle reservation",
+            "🏟️ Chercher un terrain",
+            "📅 Voir mon calendrier",
+          ],
+        };
+      }
+
+      const next = upcoming[0];
+      try {
+        const recRes = await bookingsAPI.getRecommendation(next._id || next.id);
+        const recommendation = recRes.recommendation || {};
+        const resourceName = next.resourceId?.name || 'Ressource';
+        const reasons = recommendation.reasons?.length ? `\n\nRaisons: ${recommendation.reasons.join(' ')}` : '';
+        const summary = recommendation.summary || 'Meteo indisponible pour ce creneau.';
+        const statusLabel = recommendation.status === 'good'
+          ? 'Bon'
+          : recommendation.status === 'caution'
+            ? 'Prudence'
+            : recommendation.status === 'avoid'
+              ? 'A eviter'
+              : 'Indisponible';
+
+        return {
+          text: `🌦️ Meteo pour votre prochaine reservation (${resourceName})\n\nStatut: ${statusLabel}\n${summary}${reasons}`,
+          suggestions: [
+            "📅 Voir mes reservations",
+            "🔄 Reprogrammer",
+            "💬 Autre question",
+          ],
+        };
+      } catch (error) {
+        return {
+          text: "🌦️ Je n'ai pas pu recuperer la meteo pour l'instant. Souhaitez-vous reessayer plus tard?",
+          suggestions: [
+            "🔄 Reessayer",
+            "📋 Mes reservations",
+          ],
+        };
+      }
+    }
+
     // ===== LOGIN PAGE HELP =====
     if (currentPageContext === 'login') {
       if (input.includes('oublié') || input.includes('mot de passe') || input.includes('password')) {

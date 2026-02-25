@@ -4,6 +4,7 @@ import Reservation from '../models/Reservation.js';
 import Resource from '../models/Resource.js';
 import ResourceAvailability from '../models/ResourceAvailability.js';
 import { authenticate } from '../middleware/auth.js';
+import { getReservationWeatherRecommendation } from '../utils/weatherService.js';
 import {
   sendReservationConfirmation,
   sendReservationCancellation,
@@ -12,6 +13,35 @@ import {
 } from '../utils/notificationService.js';
 
 const router = express.Router();
+
+const WEATHER_RECOMMENDATION_TTL_MS = 24 * 60 * 60 * 1000;
+
+const getStoredWeatherRecommendation = (reservation) => {
+  if (!reservation || !reservation.metadata) return null;
+  if (typeof reservation.metadata.get === 'function') {
+    return reservation.metadata.get('weatherRecommendation');
+  }
+  return reservation.metadata.weatherRecommendation || null;
+};
+
+const setStoredWeatherRecommendation = (reservation, recommendation) => {
+  if (!reservation) return;
+  if (!reservation.metadata) {
+    reservation.metadata = new Map();
+  }
+  if (typeof reservation.metadata.set === 'function') {
+    reservation.metadata.set('weatherRecommendation', recommendation);
+  } else {
+    reservation.metadata.weatherRecommendation = recommendation;
+  }
+};
+
+const isRecommendationStale = (recommendation) => {
+  if (!recommendation || !recommendation.updatedAt) return true;
+  const updatedAt = new Date(recommendation.updatedAt).getTime();
+  if (Number.isNaN(updatedAt)) return true;
+  return Date.now() - updatedAt > WEATHER_RECOMMENDATION_TTL_MS;
+};
 
 // Get all bookings
 router.get('/', authenticate, async (req, res) => {
@@ -61,6 +91,92 @@ router.get('/', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('Get bookings error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Get weather recommendations for reservations
+router.get('/recommendations', authenticate, async (req, res) => {
+  try {
+    const { scope = 'upcoming', days = 7, limit = 20 } = req.query;
+
+    const filter = {};
+    if (req.user.role === 'user') {
+      filter.userId = req.user._id;
+    }
+
+    if (scope === 'upcoming') {
+      const now = new Date();
+      const end = new Date(now.getTime() + Number(days) * 24 * 60 * 60 * 1000);
+      filter.startTime = { $gte: now, $lte: end };
+      filter.status = { $nin: ['cancelled', 'completed'] };
+    }
+
+    const reservations = await Reservation.find(filter)
+      .populate({
+        path: 'resourceId',
+        select: 'name type latitude longitude locationId',
+        populate: {
+          path: 'locationId',
+          select: 'name address latitude longitude city timezone',
+        },
+      })
+      .sort({ startTime: 1 })
+      .limit(Number(limit));
+
+    const recommendations = await Promise.all(
+      reservations.map(async (reservation) => {
+        let recommendation = getStoredWeatherRecommendation(reservation);
+        if (isRecommendationStale(recommendation)) {
+          recommendation = await getReservationWeatherRecommendation(reservation);
+          setStoredWeatherRecommendation(reservation, recommendation);
+          await reservation.save();
+        }
+        return {
+          reservationId: reservation._id,
+          recommendation,
+        };
+      })
+    );
+
+    res.json({ recommendations });
+  } catch (error) {
+    console.error('Get weather recommendations error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Get weather recommendation for a specific reservation
+router.get('/:id/recommendation', authenticate, async (req, res) => {
+  try {
+    const reservation = await Reservation.findById(req.params.id)
+      .populate({
+        path: 'resourceId',
+        select: 'name type latitude longitude locationId',
+        populate: {
+          path: 'locationId',
+          select: 'name address latitude longitude city timezone',
+        },
+      });
+
+    if (!reservation) {
+      return res.status(404).json({ message: 'Reservation not found' });
+    }
+
+    if (req.user.role === 'user' && reservation.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    let recommendation = getStoredWeatherRecommendation(reservation);
+    if (isRecommendationStale(recommendation)) {
+      recommendation = await getReservationWeatherRecommendation(reservation);
+      setStoredWeatherRecommendation(reservation, recommendation);
+      await reservation.save();
+    }
+
+    res.json({ reservationId: reservation._id, recommendation });
+  } catch (error) {
+    console.error('Get weather recommendation error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

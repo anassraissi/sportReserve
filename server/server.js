@@ -107,6 +107,8 @@ import bookingRoutes from './routes/bookings.js';
 import mediaRoutes from './routes/media.js';
 import notificationRoutes from './routes/notifications.js';
 import reviewRoutes from './routes/reviews.js';
+import locationRoutes from './routes/locations.js';
+import weatherRoutes from './routes/weather.js';
 import { initializeScheduledJobs } from './jobs/scheduledJobs.js';
 
 app.use('/api/auth', authRoutes);
@@ -115,6 +117,8 @@ app.use('/api/bookings', bookingRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/locations', locationRoutes);
+app.use('/api/weather', weatherRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

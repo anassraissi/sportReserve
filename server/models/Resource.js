@@ -44,6 +44,7 @@ const resourceSchema = new mongoose.Schema({
     ref: 'Location',
   },
   address: String,
+  city: String,
   latitude: Number,
   longitude: Number,
   floor: String,

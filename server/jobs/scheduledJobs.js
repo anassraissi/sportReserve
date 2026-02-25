@@ -1,7 +1,25 @@
 import Notification from '../models/Notification.js';
 import Reservation from '../models/Reservation.js';
-import { sendEmail, markNotificationAsSent } from '../utils/notificationService.js';
+import { sendEmail, markNotificationAsSent, sendNotification, broadcastNotification } from '../utils/notificationService.js';
 import User from '../models/User.js';
+import { getReservationWeatherRecommendation } from '../utils/weatherService.js';
+import { getRegionalWeatherSummary } from '../utils/regionWeatherService.js';
+
+const WEATHER_ALERT_LOOKAHEAD_DAYS = 7;
+const WEATHER_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const REGIONAL_WEATHER_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+const storeWeatherRecommendation = async (reservation, recommendation) => {
+  if (!reservation.metadata) {
+    reservation.metadata = new Map();
+  }
+  if (typeof reservation.metadata.set === 'function') {
+    reservation.metadata.set('weatherRecommendation', recommendation);
+  } else {
+    reservation.metadata.weatherRecommendation = recommendation;
+  }
+  await reservation.save();
+};
 
 /**
  * Process pending scheduled notifications
@@ -215,6 +233,169 @@ export const sendReservationReminders = async () => {
 };
 
 /**
+ * Refresh weather recommendations for upcoming reservations
+ * Run this periodically (e.g., daily)
+ */
+export const refreshWeatherRecommendations = async () => {
+  try {
+    console.log('[Weather] Refreshing recommendations for upcoming reservations...');
+
+    const now = new Date();
+    const end = new Date(now.getTime() + WEATHER_ALERT_LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000);
+
+    const reservations = await Reservation.find({
+      startTime: { $gte: now, $lte: end },
+      status: { $in: ['confirmed', 'paid', 'active', 'pending'] },
+    })
+      .populate('userId', 'email firstName')
+      .populate({
+        path: 'resourceId',
+        select: 'name type latitude longitude locationId',
+        populate: {
+          path: 'locationId',
+          select: 'name address latitude longitude city timezone',
+        },
+      });
+
+    if (reservations.length === 0) {
+      console.log('[Weather] No upcoming reservations to refresh');
+      return;
+    }
+
+    for (const reservation of reservations) {
+      try {
+        const recommendation = await getReservationWeatherRecommendation(reservation);
+        await storeWeatherRecommendation(reservation, recommendation);
+
+        if (recommendation.status === 'avoid') {
+          const recentAlert = await Notification.findOne({
+            type: 'weather_alert',
+            'data.reservationId': reservation._id.toString(),
+            createdAt: { $gte: new Date(Date.now() - WEATHER_ALERT_COOLDOWN_MS) },
+          });
+
+          if (!recentAlert) {
+            const resourceName = reservation.resourceId?.name || 'Ressource';
+            const startTime = new Date(reservation.startTime);
+            const reasonText = recommendation.reasons?.join(' ');
+            const title = `⚠️ Meteo defavorable - ${resourceName}`;
+            const message = `
+              <h3>Conditions meteo difficiles</h3>
+              <p><strong>${resourceName}</strong></p>
+              <p><strong>Date:</strong> ${startTime.toLocaleDateString('fr-FR')}</p>
+              <p><strong>Heure:</strong> ${startTime.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
+              <p style="margin-top: 12px;">${recommendation.summary}</p>
+              ${reasonText ? `<p style="color: #b45309;"><strong>Raisons:</strong> ${reasonText}</p>` : ''}
+              <p style="margin-top: 12px;">Vous pouvez reprogrammer votre reservation si besoin.</p>
+            `;
+
+            await sendNotification({
+              userId: reservation.userId?._id || reservation.userId,
+              type: 'weather_alert',
+              title,
+              message,
+              channels: ['in_app', 'email'],
+              data: {
+                reservationId: reservation._id.toString(),
+                recommendation,
+              },
+            });
+          }
+        }
+      } catch (error) {
+        console.error('[Weather] Recommendation refresh error:', error);
+      }
+    }
+
+    console.log('[Weather] Recommendations refreshed');
+  } catch (error) {
+    console.error('[Weather] Refresh error:', error);
+  }
+};
+
+const buildRegionalMessage = (regions, label) => {
+  const rows = regions.map((region) => {
+    const status = region[label]?.status || 'unknown';
+    const summary = region[label]?.summary || 'Donnees indisponibles.';
+    const statusLabel = status === 'good'
+      ? 'Bon'
+      : status === 'caution'
+        ? 'Prudence'
+        : status === 'avoid'
+          ? 'A eviter'
+          : 'Indisponible';
+
+    return `<li><strong>${region.name}:</strong> ${statusLabel} - ${summary}</li>`;
+  });
+
+  return `
+    <ul style="margin: 12px 0; padding-left: 18px;">
+      ${rows.join('')}
+    </ul>
+  `;
+};
+
+export const sendRegionalWeatherBroadcast = async () => {
+  try {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const existing = await Notification.findOne({
+      type: 'weather_alert',
+      'data.kind': 'regional_daily',
+      createdAt: { $gte: startOfDay },
+    });
+
+    if (existing) {
+      console.log('[Weather] Regional broadcast already sent today');
+      return;
+    }
+
+    const summary = await getRegionalWeatherSummary();
+    const regions = summary.regions || [];
+    if (regions.length === 0) {
+      console.log('[Weather] No regional data for broadcast');
+      return;
+    }
+
+    const todayBlock = buildRegionalMessage(regions, 'today');
+    const tomorrowBlock = buildRegionalMessage(regions, 'tomorrow');
+
+    const title = 'Meteo du jour: conseils sport & reservations';
+    const message = `
+      <h3>Vos conditions meteo pour aujourd'hui</h3>
+      ${todayBlock}
+      <h4>Demain</h4>
+      ${tomorrowBlock}
+      <p style="margin-top: 12px;">Profitez des meilleures conditions et reservez au bon moment.</p>
+    `;
+
+    await broadcastNotification({
+      title,
+      message,
+      type: 'weather_alert',
+      channels: ['in_app'],
+      filter: { role: 'user' },
+    });
+
+    await Notification.create({
+      userId: null,
+      type: 'weather_alert',
+      title,
+      message,
+      channel: 'in_app',
+      status: 'sent',
+      data: { kind: 'regional_daily' },
+      sentAt: new Date(),
+    });
+
+    console.log('[Weather] Regional broadcast sent');
+  } catch (error) {
+    console.error('[Weather] Regional broadcast error:', error);
+  }
+};
+
+/**
  * Initialize scheduled jobs
  */
 export const initializeScheduledJobs = (app) => {
@@ -230,11 +411,23 @@ export const initializeScheduledJobs = (app) => {
   // Run immediately
   sendReservationReminders();
 
+  // Refresh weather recommendations daily
+  setInterval(refreshWeatherRecommendations, 24 * 60 * 60 * 1000);
+  // Run immediately
+  refreshWeatherRecommendations();
+
+  // Send regional weather broadcast daily
+  setInterval(sendRegionalWeatherBroadcast, REGIONAL_WEATHER_COOLDOWN_MS);
+  // Run immediately
+  sendRegionalWeatherBroadcast();
+
   console.log('[Jobs] Scheduled jobs initialized');
 };
 
 export default {
   processScheduledNotifications,
   sendReservationReminders,
+  refreshWeatherRecommendations,
+  sendRegionalWeatherBroadcast,
   initializeScheduledJobs,
 };

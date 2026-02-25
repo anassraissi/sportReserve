@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { ReservationTicket } from '@/components/reservations/ReservationTicket';
+import { WeatherRecommendationBadge } from '@/components/reservations/WeatherRecommendationBadge';
 
 export const ReservationsPage: React.FC = () => {
   const { user } = useAuth();
@@ -23,6 +24,7 @@ export const ReservationsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedReservation, setSelectedReservation] = useState<any>(null);
   const [isTicketOpen, setIsTicketOpen] = useState(false);
+  const [weatherRecommendations, setWeatherRecommendations] = useState<Record<string, any>>({});
 
   useEffect(() => {
     const loadReservations = async () => {
@@ -31,6 +33,19 @@ export const ReservationsPage: React.FC = () => {
         // Fetch only current user's reservations - backend filters by req.user._id
         const response = await bookingsAPI.getAll({ page: 1, limit: 100 });
         setReservations(response.reservations || []);
+
+        try {
+          const weatherRes = await bookingsAPI.getRecommendations({ scope: 'all', limit: 100 });
+          const recMap: Record<string, any> = {};
+          (weatherRes.recommendations || []).forEach((item: any) => {
+            if (item?.reservationId) {
+              recMap[item.reservationId] = item.recommendation;
+            }
+          });
+          setWeatherRecommendations(recMap);
+        } catch (weatherError) {
+          console.warn('Failed to load weather recommendations:', weatherError);
+        }
       } catch (error: any) {
         console.error('Error loading reservations:', error);
         toast({
@@ -115,6 +130,7 @@ export const ReservationsPage: React.FC = () => {
     const resource = reservation.resourceId;
     const resourceType = typeof resource === 'object' ? resource?.type : 'room';
     const resourceName = typeof resource === 'object' ? resource?.name : 'Ressource';
+    const recommendation = weatherRecommendations[reservation._id || reservation.id];
     
     const isPending = reservation.status === 'pending';
     const isPaid = reservation.status === 'paid';
@@ -149,6 +165,9 @@ export const ReservationsPage: React.FC = () => {
                     <span className="font-mono">🕐</span>
                     {format(new Date(reservation.startTime), "HH:mm")} - {format(new Date(reservation.endTime), "HH:mm")}
                   </p>
+                  <div className="mt-2">
+                    <WeatherRecommendationBadge recommendation={recommendation} />
+                  </div>
                 </div>
                 <Badge variant={isPending ? 'secondary' : isPaid ? 'default' : 'outline'} className="ml-2">
                   {isPending ? '⏳ En attente' :

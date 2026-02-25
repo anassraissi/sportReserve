@@ -241,6 +241,44 @@ export const resourcesAPI = {
   },
 };
 
+// Locations API
+export const locationsAPI = {
+  getAll: async (params?: { active?: boolean }) => {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) queryParams.append(key, String(value));
+      });
+    }
+    return apiRequest<{ locations: any[] }>(`/locations?${queryParams}`);
+  },
+
+  create: async (data: {
+    name: string;
+    address: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    postalCode?: string;
+    latitude?: number;
+    longitude?: number;
+    timezone?: string;
+    isActive?: boolean;
+  }) => {
+    return apiRequest<{ location: any; message: string }>('/locations', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
+// Weather API
+export const weatherAPI = {
+  getRegions: async () => {
+    return apiRequest<{ regions: any[]; updatedAt: string }>(`/weather/regions`);
+  },
+};
+
 // Bookings API
 export const bookingsAPI = {
   getAll: async (params?: {
@@ -258,6 +296,24 @@ export const bookingsAPI = {
       });
     }
     return apiRequest<{ reservations: any[]; pagination: any }>(`/bookings?${queryParams}`);
+  },
+
+  getRecommendations: async (params?: {
+    scope?: 'upcoming' | 'all';
+    days?: number;
+    limit?: number;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) queryParams.append(key, String(value));
+      });
+    }
+    return apiRequest<{ recommendations: any[] }>(`/bookings/recommendations?${queryParams}`);
+  },
+
+  getRecommendation: async (reservationId: string) => {
+    return apiRequest<{ reservationId: string; recommendation: any }>(`/bookings/${reservationId}/recommendation`);
   },
 
   getById: async (id: string) => {

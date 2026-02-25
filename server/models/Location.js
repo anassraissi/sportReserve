@@ -13,7 +13,7 @@ const locationSchema = new mongoose.Schema({
   state: String,
   country: {
     type: String,
-    default: 'France',
+    default: 'Morocco',
   },
   postalCode: String,
   latitude: Number,

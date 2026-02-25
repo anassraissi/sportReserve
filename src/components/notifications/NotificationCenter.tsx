@@ -81,6 +81,8 @@ export const NotificationCenter = () => {
         return '❌';
       case 'payment_receipt':
         return '💳';
+      case 'weather_alert':
+        return '🌦️';
       case 'system_alert':
         return '⚠️';
       default:
@@ -94,6 +96,7 @@ export const NotificationCenter = () => {
       booking_reminder: 'Rappel',
       booking_cancellation: 'Annulation',
       payment_receipt: 'Paiement',
+      weather_alert: 'Meteo',
       system_alert: 'Alerte',
       broadcast: 'Annonce',
     };
@@ -110,6 +113,8 @@ export const NotificationCenter = () => {
         return 'bg-red-100 text-red-800';
       case 'payment_receipt':
         return 'bg-purple-100 text-purple-800';
+      case 'weather_alert':
+        return 'bg-amber-100 text-amber-800';
       case 'system_alert':
         return 'bg-yellow-100 text-yellow-800';
       default:

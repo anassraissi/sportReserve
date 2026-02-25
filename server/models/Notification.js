@@ -14,6 +14,7 @@ const notificationSchema = new mongoose.Schema({
       'booking_cancellation',
       'payment_receipt',
       'approval_required',
+      'weather_alert',
       'system_alert',
       'promotional',
       'maintenance_notice',

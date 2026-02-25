@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Loader2, Save, Upload, Image as ImageIcon, X, Users } from 'lucide-react';
-import { resourcesAPI, mediaAPI } from '@/lib/api';
+import { resourcesAPI, mediaAPI, locationsAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDataSync } from '@/contexts/DataSyncContext';
@@ -38,6 +38,10 @@ export const ResourceFormPage: React.FC = () => {
     minBookingHours: '1',
     maxBookingHours: '24',
     address: '',
+    city: '',
+    latitude: '',
+    longitude: '',
+    locationId: '',
     features: [] as string[],
     status: 'active' as 'active' | 'maintenance' | 'inactive',
   });
@@ -46,6 +50,8 @@ export const ResourceFormPage: React.FC = () => {
   const [uploadedMedia, setUploadedMedia] = useState<any[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [activeTab, setActiveTab] = useState('info');
+  const [locations, setLocations] = useState<any[]>([]);
+  const [isGeocoding, setIsGeocoding] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -71,6 +77,10 @@ export const ResourceFormPage: React.FC = () => {
             minBookingHours: resource.minBookingHours?.toString() || '1',
             maxBookingHours: resource.maxBookingHours?.toString() || '24',
             address: resource.address || '',
+            city: resource.city || '',
+            latitude: resource.latitude?.toString() || '',
+            longitude: resource.longitude?.toString() || '',
+            locationId: resource.locationId?._id || resource.locationId?.id || resource.locationId || '',
             features: resource.features || [],
             status: resource.status || 'active',
           });
@@ -88,6 +98,137 @@ export const ResourceFormPage: React.FC = () => {
       loadResource();
     }
   }, [id, toast]);
+
+  useEffect(() => {
+    const loadLocations = async () => {
+      try {
+        const response = await locationsAPI.getAll({ active: true });
+        setLocations(response.locations || []);
+      } catch (error) {
+        console.warn('Failed to load locations:', error);
+      }
+    };
+
+    if (user?.role === 'admin') {
+      loadLocations();
+    }
+  }, [user]);
+
+  const selectedLocation = locations.find(
+    (location: any) => (location._id || location.id) === formData.locationId
+  );
+
+  const handleLocationChange = (value: string) => {
+    if (value === 'none') {
+      setFormData(prev => ({ ...prev, locationId: '' }));
+      return;
+    }
+
+    setFormData(prev => ({ ...prev, locationId: value }));
+
+    const location = locations.find((loc: any) => (loc._id || loc.id) === value);
+    if (location && location.latitude && location.longitude) {
+      setFormData(prev => ({
+        ...prev,
+        latitude: location.latitude.toString(),
+        longitude: location.longitude.toString(),
+      }));
+    }
+  };
+
+  const handleGeocode = async () => {
+    const address = formData.address?.trim() || '';
+    const city = formData.city?.trim() || '';
+    const locationAddress = selectedLocation?.address || selectedLocation?.name || '';
+
+    let query = address || locationAddress || city;
+
+    if (city && query && !query.includes(city)) {
+      query = `${query}, ${city}`;
+    }
+
+    if (!query) {
+      toast({
+        title: 'Adresse manquante',
+        description: 'Entrez une adresse ou choisissez une localisation.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      setIsGeocoding(true);
+      const candidates = [] as string[];
+      const hasCountry = /morocco|maroc/i.test(query);
+      const baseQuery = hasCountry ? query : `${query}, Morocco`;
+
+      candidates.push(baseQuery);
+      if (city) {
+        candidates.push(`${city}, Morocco`);
+        candidates.push(`${city}, Maroc`);
+      }
+      if (address) {
+        candidates.push(`${address}, Morocco`);
+      }
+
+      let result: any = null;
+
+      for (const candidate of candidates) {
+        const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
+        url.searchParams.set('name', candidate);
+        url.searchParams.set('count', '1');
+        url.searchParams.set('language', 'fr');
+        url.searchParams.set('format', 'json');
+
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+          continue;
+        }
+        const data = await response.json();
+        if (data?.results?.[0]) {
+          result = data.results[0];
+          break;
+        }
+      }
+
+      if (!result) {
+        const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
+        url.searchParams.set('name', baseQuery);
+        url.searchParams.set('count', '1');
+        url.searchParams.set('language', 'en');
+        url.searchParams.set('format', 'json');
+
+        const response = await fetch(url.toString());
+        if (response.ok) {
+          const data = await response.json();
+          result = data?.results?.[0] || null;
+        }
+      }
+
+      if (!result) {
+        throw new Error('No coordinates found');
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        latitude: String(result.latitude),
+        longitude: String(result.longitude),
+      }));
+
+      toast({
+        title: 'Coordonnees mises a jour',
+        description: 'Latitude et longitude remplies automatiquement.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Erreur de geocodage',
+        description: error.message || "Impossible de recuperer les coordonnees. Essayez une adresse plus precise.",
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGeocoding(false);
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -155,6 +296,16 @@ export const ResourceFormPage: React.FC = () => {
         return;
       }
 
+      if (formData.type === 'terrain' && (!formData.latitude || !formData.longitude)) {
+        toast({
+          title: 'Coordonnees requises',
+          description: 'Ajoutez la latitude et la longitude pour les terrains.',
+          variant: 'destructive',
+        });
+        setIsSaving(false);
+        return;
+      }
+
       const data = {
         ...formData,
         capacity: formData.capacity ? parseInt(formData.capacity) : undefined,
@@ -162,6 +313,10 @@ export const ResourceFormPage: React.FC = () => {
         taxRate: formData.taxRate ? parseFloat(formData.taxRate) : 20,
         minBookingHours: formData.minBookingHours ? parseInt(formData.minBookingHours) : 1,
         maxBookingHours: formData.maxBookingHours ? parseInt(formData.maxBookingHours) : 24,
+        latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
+        longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
+        locationId: formData.locationId || undefined,
+        city: formData.city || undefined,
         managerId: user?.id, // Add manager ID
       };
 
@@ -437,6 +592,72 @@ export const ResourceFormPage: React.FC = () => {
                   value={formData.address}
                   onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="city">Ville</Label>
+                  <Input
+                    id="city"
+                    value={formData.city}
+                    onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                    placeholder="Ex: Casablanca"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="locationId">Localisation (optionnelle)</Label>
+                <Select value={formData.locationId || 'none'} onValueChange={handleLocationChange}>
+                  <SelectTrigger id="locationId">
+                    <SelectValue placeholder="Choisir une localisation" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Aucune</SelectItem>
+                    {locations.map((location: any) => (
+                      <SelectItem key={location._id || location.id} value={location._id || location.id}>
+                        {location.name} {location.city ? `- ${location.city}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {locations.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Aucune localisation disponible.</p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="latitude">Latitude</Label>
+                  <Input
+                    id="latitude"
+                    type="number"
+                    step="0.000001"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData(prev => ({ ...prev, latitude: e.target.value }))}
+                    placeholder="Ex: 48.8566"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="longitude">Longitude</Label>
+                  <Input
+                    id="longitude"
+                    type="number"
+                    step="0.000001"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData(prev => ({ ...prev, longitude: e.target.value }))}
+                    placeholder="Ex: 2.3522"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" variant="outline" onClick={handleGeocode} disabled={isGeocoding}>
+                  {isGeocoding ? 'Recherche...' : 'Auto-completer lat/long'}
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  Recommande pour les terrains. Utilise l'adresse, la ville, ou la localisation choisie.
+                </p>
               </div>
 
               <div className="space-y-2">

@@ -26,6 +26,12 @@ import {
   Zap,
   Lightbulb,
   Sparkles,
+  Sun,
+  CloudRain,
+  CloudSun,
+  Cloud,
+  Wind,
+  Compass,
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -43,13 +49,14 @@ import {
   LabelList,
   ResponsiveContainer 
 } from 'recharts';
-import { bookingsAPI, resourcesAPI, reviewsAPI, mediaAPI } from '@/lib/api';
+import { bookingsAPI, resourcesAPI, reviewsAPI, mediaAPI, weatherAPI } from '@/lib/api';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { analyzeBookingPatterns, getRecommendations, getTrendingResources } from '@/lib/recommendations';
 import { getImageUrl } from '@/lib/utils';
 import { ReservationTicket } from '@/components/reservations/ReservationTicket';
+import { WeatherRecommendationBadge } from '@/components/reservations/WeatherRecommendationBadge';
 import { ReviewModal } from '@/components/reviews/ReviewModal';
 import { ReviewCard } from '@/components/reviews/ReviewCard';
 import { ReservationCalendar } from '@/components/dashboard/ReservationCalendar';
@@ -76,6 +83,9 @@ export const DashboardPage: React.FC = () => {
   const [recommendations, setRecommendations] = useState<any[]>([]);
   const [allResources, setAllResources] = useState<any[]>([]);
   const [resourceImages, setResourceImages] = useState<{[key: string]: string}>({});
+  const [weatherRecommendations, setWeatherRecommendations] = useState<Record<string, any>>({});
+  const [regionalWeather, setRegionalWeather] = useState<any[]>([]);
+  const [regionalWeatherUpdatedAt, setRegionalWeatherUpdatedAt] = useState<string | null>(null);
   const [stats, setStats] = useState({
     totalReservations: 0,
     activeReservations: 0,
@@ -257,6 +267,27 @@ export const DashboardPage: React.FC = () => {
           });
         }
 
+        try {
+          const weatherRes = await bookingsAPI.getRecommendations({ scope: 'upcoming', days: 7, limit: 20 });
+          const recMap: Record<string, any> = {};
+          (weatherRes.recommendations || []).forEach((item: any) => {
+            if (item?.reservationId) {
+              recMap[item.reservationId] = item.recommendation;
+            }
+          });
+          setWeatherRecommendations(recMap);
+        } catch (weatherError) {
+          console.warn('Failed to load weather recommendations:', weatherError);
+        }
+
+        try {
+          const regionalRes = await weatherAPI.getRegions();
+          setRegionalWeather(regionalRes.regions || []);
+          setRegionalWeatherUpdatedAt(regionalRes.updatedAt || null);
+        } catch (regionalError) {
+          console.warn('Failed to load regional weather:', regionalError);
+        }
+
         // Load reviews
         try {
           const reviewsRes = await reviewsAPI.getAll({ page: 1, limit: 100 });
@@ -333,6 +364,76 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
+  const getRegionalStatusMeta = (status: string) => {
+    const variants: Record<string, { label: string; className: string; icon: React.ReactNode }> = {
+      good: {
+        label: 'Bon',
+        className: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        icon: <Sun className="h-4 w-4" />,
+      },
+      caution: {
+        label: 'Prudence',
+        className: 'bg-amber-100 text-amber-800 border-amber-200',
+        icon: <CloudSun className="h-4 w-4" />,
+      },
+      avoid: {
+        label: 'A eviter',
+        className: 'bg-red-100 text-red-800 border-red-200',
+        icon: <CloudRain className="h-4 w-4" />,
+      },
+      unknown: {
+        label: 'Indisponible',
+        className: 'bg-slate-100 text-slate-700 border-slate-200',
+        icon: <Cloud className="h-4 w-4" />,
+      },
+    };
+
+    return variants[status] || variants.unknown;
+  };
+
+  const getRegionalMotivation = (regions: any[]) => {
+    const counts = regions.reduce(
+      (acc, region) => {
+        const status = region?.today?.status || 'unknown';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>
+    );
+
+    if (counts.avoid) {
+      return {
+        title: 'Attention aux conditions du jour',
+        message: "Certaines zones sont difficiles. Mieux vaut reprogrammer ou choisir un horaire protege.",
+        accent: 'bg-red-100 text-red-800',
+        icon: <Wind className="h-5 w-5" />,
+      };
+    }
+
+    if (counts.caution) {
+      return {
+        title: 'Conditions mixtes',
+        message: "Quelques precautions suffisent. Choisissez un horaire adapte et equipez-vous bien.",
+        accent: 'bg-amber-100 text-amber-800',
+        icon: <CloudSun className="h-5 w-5" />,
+      };
+    }
+
+    return {
+      title: 'Belle journee pour bouger',
+      message: "Les conditions sont favorables. C'est le bon moment pour reserver.",
+      accent: 'bg-emerald-100 text-emerald-800',
+      icon: <Sun className="h-5 w-5" />,
+    };
+  };
+
+  const formatMetric = (value: unknown, unit: string, precision = 0) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return 'n/a';
+    }
+    return `${value.toFixed(precision)}${unit}`;
+  };
+
   // Get reservations pending user reviews (completed but not reviewed)
   const pendingReviewReservations = reservations
     .filter((r: any) => {
@@ -384,49 +485,59 @@ export const DashboardPage: React.FC = () => {
   return (
     <AppLayout>
       <div className="space-y-8">
-        {/* User Greeting Section - TOP */}
+        {/* User Greeting + Weather Section - TOP */}
         {user?.role !== 'admin' && (
-          <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white/85 backdrop-blur p-6 lg:p-8">
-            <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-orange-200/60 blur-3xl" />
-            <div className="absolute -left-20 bottom-0 h-48 w-48 rounded-full bg-emerald-200/50 blur-3xl" />
+          <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-5 lg:p-6">
+            <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-orange-200/50 blur-3xl" />
+            <div className="absolute -left-20 bottom-0 h-48 w-48 rounded-full bg-emerald-200/40 blur-3xl" />
+            <div className="absolute right-20 bottom-10 h-32 w-32 rounded-full bg-sky-200/40 blur-2xl" />
 
-            <div className="relative grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="relative grid gap-6 lg:grid-cols-[1.1fr_1fr]">
               <div className="space-y-5">
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16 border-2 border-slate-900 shadow-lg">
-                    <AvatarImage 
-                      src={user?.avatarUrl 
+                    <AvatarImage
+                      src={user?.avatarUrl
                         ? (user.avatarUrl.startsWith('http') ? user.avatarUrl : `http://localhost:5000${user.avatarUrl}`)
                         : undefined
-                      } 
+                      }
                     />
                     <AvatarFallback className="bg-gradient-to-br from-orange-500 to-yellow-300 text-slate-900 text-lg font-bold">
                       {user?.firstName?.[0]}{user?.lastName?.[0]}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <h1 className="font-display text-3xl font-medium text-slate-900">Salut, {user?.firstName}</h1>
-                    <p className="text-slate-600">Tes terrains t'attendent. Fais ton prochain move.</p>
+                    <h1 className="font-display text-2xl font-medium text-slate-900">Salut, {user?.firstName}</h1>
+                    <p className="text-sm text-slate-600">Tes terrains t'attendent. Fais ton prochain move.</p>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Actives</p>
-                    <p className="text-2xl font-semibold text-slate-900">{stats.activeReservations}</p>
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 shadow-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-emerald-500">Actives</p>
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-emerald-500" />
+                      <p className="text-2xl font-semibold text-slate-900">{stats.activeReservations}</p>
+                    </div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Total</p>
-                    <p className="text-2xl font-semibold text-slate-900">{stats.totalReservations}</p>
+                  <div className="rounded-2xl border border-sky-200 bg-sky-50/80 px-4 py-3 shadow-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-sky-500">Total</p>
+                    <div className="flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-sky-500" />
+                      <p className="text-2xl font-semibold text-slate-900">{stats.totalReservations}</p>
+                    </div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 shadow-sm">
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Disponibles</p>
-                    <p className="text-2xl font-semibold text-slate-900">{stats.terrains + stats.salles + stats.equipment}</p>
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50/80 px-4 py-3 shadow-sm">
+                    <p className="text-xs uppercase tracking-[0.2em] text-amber-500">Disponibles</p>
+                    <div className="flex items-center gap-2">
+                      <MapPinned className="h-4 w-4 text-amber-500" />
+                      <p className="text-2xl font-semibold text-slate-900">{stats.terrains + stats.salles + stats.equipment}</p>
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  <Button asChild className="bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-900/30">
+                  <Button asChild className="bg-gradient-to-r from-slate-900 to-slate-800 hover:from-slate-800 hover:to-slate-700 text-white shadow-lg shadow-slate-900/30">
                     <Link to="/reservations/new">
                       <CalendarPlus className="h-4 w-4 mr-2" />
                       Réserver maintenant
@@ -434,42 +545,232 @@ export const DashboardPage: React.FC = () => {
                   </Button>
                   <Button asChild variant="outline" className="border-slate-300 bg-white/90">
                     <Link to="/resources/terrains">
+                      <Compass className="h-4 w-4 mr-2" />
                       Explorer les ressources
                       <ArrowRight className="h-4 w-4 ml-2" />
                     </Link>
                   </Button>
                 </div>
-              </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Prochaine session</p>
-                  <Badge variant="secondary" className="bg-orange-100 text-orange-700">Focus</Badge>
-                </div>
-                {nextReservation ? (
-                  <div className="mt-4 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                        <Clock className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <p className="font-semibold text-slate-900">
-                          {typeof nextReservation.resourceId === 'object' ? nextReservation.resourceId.name : 'Ressource'}
-                        </p>
-                        <p className="text-sm text-slate-500">
-                          {format(new Date(nextReservation.startTime), 'PPp', { locale: fr })}
-                        </p>
+                {regionalWeather.length > 0 && (
+                  <div className="space-y-4">
+                    <div className={`flex items-start gap-3 rounded-2xl px-4 py-3 text-sm font-medium shadow-sm ${getRegionalMotivation(regionalWeather).accent}`}>
+                      {getRegionalMotivation(regionalWeather).icon}
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold">{getRegionalMotivation(regionalWeather).title}</p>
+                        <p className="text-xs opacity-80">{getRegionalMotivation(regionalWeather).message}</p>
+                        <p className="text-xs italic opacity-75">"Bouge aujourd'hui, remercie-toi demain."</p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      {getStatusBadge(nextReservation.status)}
+
+                    <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-sky-50 to-emerald-50 p-5 shadow-sm">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Meteo locale</p>
+                        <div className="flex items-center gap-2 text-slate-500 text-xs">
+                          <Sun className="h-4 w-4" />
+                          Aujourd'hui & demain
+                        </div>
+                      </div>
+                      <div className="mt-3 flex items-center gap-2 text-xs text-emerald-700">
+                        <Sparkles className="h-4 w-4" />
+                        Choisis ton meilleur moment pour t'entrainer.
+                      </div>
+                      <div className="mt-4 grid gap-3">
+                        {regionalWeather.map((region: any) => {
+                          const todayMeta = getRegionalStatusMeta(region?.today?.status || 'unknown');
+                          const tomorrowMeta = getRegionalStatusMeta(region?.tomorrow?.status || 'unknown');
+                          const todayMetrics = region?.today?.metrics || {};
+                          return (
+                            <div key={region.key} className="rounded-xl border border-slate-200 bg-white/90 p-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-semibold text-slate-900">{region.name}</p>
+                                <Badge variant="outline" className={`border ${todayMeta.className} flex items-center gap-1`}>
+                                  {todayMeta.icon}
+                                  {todayMeta.label}
+                                </Badge>
+                              </div>
+                              <p className="text-xs text-slate-600 mt-1">{region?.today?.summary || 'Donnees indisponibles.'}</p>
+                              <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+                                <div className="flex items-center justify-between rounded-lg bg-slate-50 px-2 py-1">
+                                  <span className="flex items-center gap-1">
+                                    <Sun className="h-3.5 w-3.5 text-amber-500" />
+                                    Temp
+                                  </span>
+                                  <span className="font-medium text-slate-800">
+                                    {typeof todayMetrics.tempMin === 'number' && typeof todayMetrics.tempMax === 'number'
+                                      ? `${Math.round(todayMetrics.tempMin)}-${Math.round(todayMetrics.tempMax)}°C`
+                                      : 'n/a'}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between rounded-lg bg-slate-50 px-2 py-1">
+                                  <span className="flex items-center gap-1">
+                                    <Wind className="h-3.5 w-3.5 text-sky-500" />
+                                    Vent
+                                  </span>
+                                  <span className="font-medium text-slate-800">
+                                    {formatMetric(todayMetrics.windMax, ' km/h')}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between rounded-lg bg-slate-50 px-2 py-1">
+                                  <span className="flex items-center gap-1">
+                                    <CloudRain className="h-3.5 w-3.5 text-blue-500" />
+                                    Pluie
+                                  </span>
+                                  <span className="font-medium text-slate-800">
+                                    {formatMetric(todayMetrics.precipitationMax, ' mm', 1)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between rounded-lg bg-slate-50 px-2 py-1">
+                                  <span className="flex items-center gap-1">
+                                    <Cloud className="h-3.5 w-3.5 text-slate-500" />
+                                    Humidite
+                                  </span>
+                                  <span className="font-medium text-slate-800">
+                                    {formatMetric(todayMetrics.humidityMax, ' %')}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="mt-2 text-[11px] text-slate-500 flex items-center justify-between">
+                                <span className="flex items-center gap-1">
+                                  {tomorrowMeta.icon}
+                                  Demain
+                                </span>
+                                <span className="font-medium">{tomorrowMeta.label}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {regionalWeatherUpdatedAt && (
+                        <div className="mt-3 text-xs text-slate-400">
+                          Mise a jour: {format(new Date(regionalWeatherUpdatedAt), 'PPp', { locale: fr })}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="mt-4 rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">
-                    Aucune reservation prevue. Choisis ton prochain terrain.
                   </div>
                 )}
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Prochaine session</p>
+                    <Badge variant="secondary" className="bg-orange-100 text-orange-700">Focus</Badge>
+                  </div>
+                  {nextReservation ? (
+                    <div className="mt-4 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                          <Clock className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-900">
+                            {typeof nextReservation.resourceId === 'object' ? nextReservation.resourceId.name : 'Ressource'}
+                          </p>
+                          <p className="text-sm text-slate-500">
+                            {format(new Date(nextReservation.startTime), 'PPp', { locale: fr })}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        {getStatusBadge(nextReservation.status)}
+                        <WeatherRecommendationBadge
+                          compact
+                          recommendation={weatherRecommendations[nextReservation._id || nextReservation.id]}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="rounded-2xl border border-slate-200 bg-white/90 p-5 shadow-sm">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Focus du jour</p>
+                          <Badge variant="outline" className="border-emerald-200 text-emerald-700">Inspire</Badge>
+                        </div>
+                        <div className="mt-4 grid gap-4">
+                          <div>
+                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+                              <Calendar className="h-4 w-4 text-emerald-600" />
+                              Prochaines reservations
+                            </div>
+                            <p className="text-xs text-slate-500 mt-1">Ton agenda sportif en un coup d'oeil.</p>
+                            <div className="mt-3 space-y-3">
+                              {upcomingReservations.length > 0 ? (
+                                upcomingReservations.map((reservation: any) => (
+                                  <div
+                                    key={reservation._id || reservation.id}
+                                    className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className="h-9 w-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                        {getResourceIcon(reservation.resourceId?.type || reservation.type)}
+                                      </div>
+                                      <div>
+                                        <p className="text-sm font-semibold text-slate-900">
+                                          {typeof reservation.resourceId === 'object'
+                                            ? reservation.resourceId.name
+                                            : 'Ressource'}
+                                        </p>
+                                        <p className="text-xs text-slate-500">
+                                          {format(new Date(reservation.startTime), 'PPp', { locale: fr })}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      {getStatusBadge(reservation.status)}
+                                      <WeatherRecommendationBadge
+                                        compact
+                                        recommendation={weatherRecommendations[reservation._id || reservation.id]}
+                                      />
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className="rounded-xl border border-dashed border-slate-200 p-4 text-center text-xs text-slate-500">
+                                  Aucun rendez-vous pour le moment. Planifie ta prochaine session.
+                                </div>
+                              )}
+                            </div>
+                            <div className="pt-3">
+                              <Button asChild variant="outline" className="border-slate-300">
+                                <Link to="/reservations">
+                                  Voir tout mon calendrier
+                                  <ArrowRight className="h-4 w-4 ml-2" />
+                                </Link>
+                              </Button>
+                            </div>
+                          </div>
+
+                          <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 p-4 text-white">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <p className="text-xs uppercase tracking-[0.2em] text-slate-300">Ton rythme</p>
+                                <p className="text-xs text-slate-400 mt-1">Un resume rapide de ton activite.</p>
+                              </div>
+                              <TrendingUp className="h-5 w-5 text-emerald-300" />
+                            </div>
+                            <div className="mt-4 grid gap-3">
+                              <div className="flex items-center justify-between rounded-xl bg-white/10 px-3 py-2">
+                                <span className="text-xs text-slate-300">En cours</span>
+                                <span className="text-lg font-semibold">{stats.activeReservations}</span>
+                              </div>
+                              <div className="flex items-center justify-between rounded-xl bg-white/10 px-3 py-2">
+                                <span className="text-xs text-slate-300">Avis a donner</span>
+                                <span className="text-lg font-semibold">{pendingReviewReservations.length}</span>
+                              </div>
+                              <div className="rounded-xl bg-white/10 px-3 py-2">
+                                <p className="text-xs text-slate-300">Objectif du mois</p>
+                                <p className="text-lg font-semibold">+{Math.max(2, stats.activeReservations)} sessions</p>
+                                <p className="text-xs text-slate-400">Continue sur ta lancee.</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
               </div>
             </div>
           </section>
@@ -758,11 +1059,6 @@ export const DashboardPage: React.FC = () => {
             <AdminBroadcastNotification />
           </div>
 
-          {/* Admin Broadcast Notification */}
-          <div className="mt-6">
-            <AdminBroadcastNotification />
-          </div>
-
           {/* Admin Reservation Calendar */}
           <div className="mt-8">
             <ReservationCalendar 
@@ -929,8 +1225,8 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
 
-        {/* Quick Access for Users / Stats cards for Admin */}
-        {user?.role === 'admin' ? (
+        {/* Stats cards for Admin */}
+        {user?.role === 'admin' && (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Card className="border-l-4 border-l-green-500 hover:shadow-lg transition-all">
               <CardHeader className="flex flex-row items-center justify-between pb-3 bg-green-50">
@@ -965,173 +1261,8 @@ export const DashboardPage: React.FC = () => {
               </CardContent>
             </Card>
           </div>
-        ) : (
-          <Card className="border border-slate-200 bg-white/85 shadow-sm">
-            <CardHeader className="pb-2">
-              <CardTitle className="font-display text-xl font-medium text-slate-900 flex items-center gap-2">
-                <Zap className="h-6 w-6 text-orange-500" />
-                Acces rapide
-              </CardTitle>
-              <CardDescription>Choisis ton terrain et reserve en un clic.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <Link to="/resources/terrains" className="group">
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 transition-all group-hover:-translate-y-1 group-hover:shadow-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="h-10 w-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center">
-                        <MapPinned className="h-5 w-5" />
-                      </div>
-                      <span className="text-xs uppercase tracking-[0.2em] text-emerald-700">Terrains</span>
-                    </div>
-                    <p className="mt-4 text-2xl font-semibold text-slate-900">{stats.terrains}</p>
-                    <p className="text-sm text-emerald-700">Disponibles maintenant</p>
-                  </div>
-                </Link>
-
-                <Link to="/resources/salles" className="group">
-                  <div className="rounded-2xl border border-orange-200 bg-orange-50/70 p-4 transition-all group-hover:-translate-y-1 group-hover:shadow-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="h-10 w-10 rounded-xl bg-orange-500 text-white flex items-center justify-center">
-                        <Building2 className="h-5 w-5" />
-                      </div>
-                      <span className="text-xs uppercase tracking-[0.2em] text-orange-700">Salles</span>
-                    </div>
-                    <p className="mt-4 text-2xl font-semibold text-slate-900">{stats.salles}</p>
-                    <p className="text-sm text-orange-700">Energie indoor</p>
-                  </div>
-                </Link>
-
-                <Link to="/resources/equipements" className="group">
-                  <div className="rounded-2xl border border-purple-200 bg-purple-50/70 p-4 transition-all group-hover:-translate-y-1 group-hover:shadow-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="h-10 w-10 rounded-xl bg-purple-600 text-white flex items-center justify-center">
-                        <Dumbbell className="h-5 w-5" />
-                      </div>
-                      <span className="text-xs uppercase tracking-[0.2em] text-purple-700">Equipements</span>
-                    </div>
-                    <p className="mt-4 text-2xl font-semibold text-slate-900">{stats.equipment}</p>
-                    <p className="text-sm text-purple-700">Prets pour toi</p>
-                  </div>
-                </Link>
-
-                <Link to="/reservations" className="group">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 transition-all group-hover:-translate-y-1 group-hover:shadow-lg">
-                    <div className="flex items-center justify-between">
-                      <div className="h-10 w-10 rounded-xl bg-slate-900 text-white flex items-center justify-center">
-                        <Calendar className="h-5 w-5" />
-                      </div>
-                      <span className="text-xs uppercase tracking-[0.2em] text-slate-500">Reservations</span>
-                    </div>
-                    <p className="mt-4 text-2xl font-semibold text-slate-900">{stats.totalReservations}</p>
-                    <p className="text-sm text-slate-600">Voir mon calendrier</p>
-                  </div>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
         )}
 
-        {user?.role !== 'admin' && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="border border-slate-200 bg-white/85">
-              <CardHeader className="pb-3">
-                <CardTitle className="font-display text-xl font-medium text-slate-900 flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-emerald-600" />
-                  Prochaines reservations
-                </CardTitle>
-                <CardDescription>Ton agenda sportif en un coup d'oeil.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {upcomingReservations.length > 0 ? (
-                  upcomingReservations.map((reservation: any) => (
-                    <div
-                      key={reservation._id || reservation.id}
-                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/80 p-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                          {getResourceIcon(reservation.resourceId?.type || reservation.type)}
-                        </div>
-                        <div>
-                          <p className="font-semibold text-slate-900">
-                            {typeof reservation.resourceId === 'object'
-                              ? reservation.resourceId.name
-                              : 'Ressource'}
-                          </p>
-                          <p className="text-sm text-slate-500">
-                            {format(new Date(reservation.startTime), 'PPp', { locale: fr })}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {getStatusBadge(reservation.status)}
-                        {/* <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-slate-300"
-                          onClick={() => {
-                            setSelectedReservation(reservation);
-                            setIsTicketOpen(true);
-                          }}
-                        >
-                          Ticket
-                        </Button> */}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-                    Aucun rendez-vous pour le moment. Planifie ta prochaine session.
-                  </div>
-                )}
-                <div className="pt-2">
-                  <Button asChild variant="outline" className="border-slate-300">
-                    <Link to="/reservations">
-                      Voir tout mon calendrier
-                      <ArrowRight className="h-4 w-4 ml-2" />
-                    </Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="border border-slate-200 bg-white/85">
-              <CardHeader className="pb-3">
-                <CardTitle className="font-display text-xl font-medium text-slate-900 flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-orange-500" />
-                  Ton rythme
-                </CardTitle>
-                <CardDescription>Un resume rapide de ton activite.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">En cours</p>
-                    <p className="text-2xl font-semibold text-slate-900">{stats.activeReservations}</p>
-                  </div>
-                  <div className="h-10 w-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
-                    <Zap className="h-5 w-5" />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/80 p-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-400">Avis a donner</p>
-                    <p className="text-2xl font-semibold text-slate-900">{pendingReviewReservations.length}</p>
-                  </div>
-                  <div className="h-10 w-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
-                    <Star className="h-5 w-5" />
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-900 to-slate-800 p-4 text-white">
-                  <p className="text-sm text-slate-200">Objectif du mois</p>
-                  <p className="font-display text-2xl font-medium">+{Math.max(2, stats.activeReservations)} sessions</p>
-                  <p className="text-xs text-slate-300">Continue sur ta lancée.</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
 
         {/* Admin Analytics Section */}
         {user?.role === 'admin' && (
