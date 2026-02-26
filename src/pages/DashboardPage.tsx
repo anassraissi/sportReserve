@@ -492,7 +492,7 @@ export const DashboardPage: React.FC = () => {
             <div className="absolute -left-20 bottom-0 h-48 w-48 rounded-full bg-emerald-200/40 blur-3xl" />
             <div className="absolute right-20 bottom-10 h-32 w-32 rounded-full bg-sky-200/40 blur-2xl" />
 
-            <div className="relative grid gap-6 lg:grid-cols-[1.1fr_1fr]">
+            <div className="relative grid gap-6 lg:grid-cols-[2.5fr_1fr]">
               <div className="space-y-5">
                 <div className="flex items-center gap-4">
                   <Avatar className="h-16 w-16 border-2 border-slate-900 shadow-lg">

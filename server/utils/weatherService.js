@@ -1,4 +1,5 @@
 const DEFAULT_WEATHER_BASE_URL = 'https://api.open-meteo.com/v1/forecast';
+const MAX_FORECAST_DAYS = 16;
 const HOURLY_FIELDS = [
   'temperature_2m',
   'precipitation',
@@ -8,10 +9,22 @@ const HOURLY_FIELDS = [
 ];
 
 const toUtcDateString = (date) => {
-  if (!(date instanceof Date)) {
+  let dateObj;
+  
+  if (typeof date === 'string') {
+    // Handle ISO string format
+    dateObj = new Date(date);
+  } else if (date instanceof Date) {
+    dateObj = date;
+  } else {
     return null;
   }
-  return date.toISOString().slice(0, 10);
+  
+  if (Number.isNaN(dateObj.getTime())) {
+    return null;
+  }
+  
+  return dateObj.toISOString().slice(0, 10);
 };
 
 const buildUnknownRecommendation = (reason) => {
@@ -173,20 +186,45 @@ export const fetchHourlyForecast = async ({ latitude, longitude, startTime, endT
 };
 
 export const getWeatherRecommendation = async ({ latitude, longitude, startTime, endTime }) => {
+  console.log(`[Weather] Getting recommendation for (${latitude}, ${longitude}) from ${startTime} to ${endTime}`);
+  
   if (latitude === null || latitude === undefined || longitude === null || longitude === undefined) {
+    console.warn('[Weather] Missing coordinates');
     return buildUnknownRecommendation('Coordonnees manquantes pour la localisation.');
   }
 
-  if (startTime && new Date(startTime).getTime() < Date.now()) {
+  const startMs = startTime ? new Date(startTime).getTime() : null;
+  const nowMs = Date.now();
+
+  if (startTime && startMs < nowMs) {
+    console.warn(`[Weather] Start time in past: ${startTime}`);
     return buildUnknownRecommendation('Creneau deja passe.');
   }
 
+  if (startTime) {
+    const maxMs = nowMs + MAX_FORECAST_DAYS * 24 * 60 * 60 * 1000;
+    if (!Number.isNaN(startMs) && startMs > maxMs) {
+      console.warn(`[Weather] Start time beyond forecast window: ${startTime} (max: ${new Date(maxMs).toISOString()})`);
+      return buildUnknownRecommendation('Previsions disponibles 16 jours avant la date.');
+    }
+  }
+
   try {
+    console.log(`[Weather] Fetching forecast from Open-Meteo API...`);
     const forecast = await fetchHourlyForecast({ latitude, longitude, startTime, endTime });
+    console.log(`[Weather] Forecast received. Time points: ${forecast.hourly?.time?.length || 0}`);
+    
     const metrics = extractWindowMetrics(forecast.hourly, startTime, endTime);
-    return buildRecommendationFromMetrics(metrics);
+    console.log(`[Weather] Metrics extracted:`, metrics);
+    
+    const recommendation = buildRecommendationFromMetrics(metrics);
+    console.log(`[Weather] Recommendation built: status=${recommendation.status}, score=${recommendation.score}`);
+    
+    return recommendation;
   } catch (error) {
-    return buildUnknownRecommendation('Erreur de recuperation meteo.');
+    console.error(`[Weather] Error during forecast fetch:`, error.message);
+    console.error(`[Weather] Full error:`, error);
+    return buildUnknownRecommendation(`Erreur API: ${error.message}`);
   }
 };
 

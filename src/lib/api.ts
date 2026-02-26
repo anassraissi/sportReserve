@@ -277,6 +277,100 @@ export const weatherAPI = {
   getRegions: async () => {
     return apiRequest<{ regions: any[]; updatedAt: string }>(`/weather/regions`);
   },
+
+  getForecast16Days: async (params: {
+    resourceId?: string;
+    latitude?: number;
+    longitude?: number;
+  }) => {
+    const queryParams = new URLSearchParams();
+    if (params.resourceId) queryParams.append('resourceId', params.resourceId);
+    if (typeof params.latitude === 'number') queryParams.append('latitude', String(params.latitude));
+    if (typeof params.longitude === 'number') queryParams.append('longitude', String(params.longitude));
+    return apiRequest<{
+      days: Array<{
+        date: string;
+        tempMin: number;
+        tempMax: number;
+        precipitation: number;
+        windMax: number;
+        weathercode: number;
+        weatherDescription: string;
+        recommendation: { status: string; score: number; reasons: string[] };
+      }>;
+      location: { latitude: number; longitude: number };
+      period: string;
+      source: string;
+    }>(`/weather/forecast-16days?${queryParams}`);
+  },
+
+  getComprehensiveForecast: async (params: {
+    resourceId?: string;
+    ville?: string;
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    startDate?: string;
+    selectedHour?: number;
+  }) => {
+    return apiRequest<{
+      location: {
+        ville: string;
+        address: string;
+        latitude: number;
+        longitude: number;
+      };
+      period: {
+        start: string;
+        end: string;
+      };
+      selectedDate: string;
+      selectedHour?: number;
+      daily: Array<{
+        date: string;
+        day: string;
+        tempMin: number;
+        tempMax: number;
+        precipitation: number;
+        windMax: number;
+        weathercode: number;
+        weatherDescription: string;
+        recommendation: { status: string; score: number; reasons: string[] };
+        indicators: {
+          temperature: { value: number; label: string; level: number };
+          precipitation: { value: number; label: string; level: number };
+          wind: { value: number; label: string; level: number };
+        };
+      }>;
+      hourly: Array<{
+        hour: number;
+        time: string;
+        temperature: number;
+        precipitation: number;
+        windspeed: number;
+        humidity: number;
+        weathercode: number;
+        weatherDescription: string;
+      }>;
+      selectedHourRecommendation?: {
+        status: string;
+        score: number;
+        reasons: string[];
+        metrics: {
+          temperature: number;
+          precipitation: number;
+          windspeed: number;
+          humidity: number;
+          weatherDescription: string;
+        };
+      };
+      source: string;
+      updatedAt: string;
+    }>('/weather/forecast-comprehensive', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
 };
 
 // Bookings API
@@ -314,6 +408,18 @@ export const bookingsAPI = {
 
   getRecommendation: async (reservationId: string) => {
     return apiRequest<{ reservationId: string; recommendation: any }>(`/bookings/${reservationId}/recommendation`);
+  },
+
+  getRecommendationPreview: async (params: {
+    resourceId: string;
+    startTime: string;
+    endTime: string;
+  }) => {
+    const queryParams = new URLSearchParams();
+    queryParams.set('resourceId', params.resourceId);
+    queryParams.set('startTime', params.startTime);
+    queryParams.set('endTime', params.endTime);
+    return apiRequest<{ recommendation: any }>(`/bookings/recommendation-preview?${queryParams}`);
   },
 
   getById: async (id: string) => {

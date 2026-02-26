@@ -119,7 +119,7 @@ export const sendReservationReminders = async () => {
         // Check if reminder already sent for this reservation
         const existingReminder = await Notification.findOne({
           type: 'booking_reminder',
-          'data.reservationId': reservation._id,
+          'data.reservationId': reservation._id.toString(),
           status: { $ne: 'failed' },
         });
 

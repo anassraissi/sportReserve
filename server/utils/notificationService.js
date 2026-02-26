@@ -179,6 +179,17 @@ export const generateEmailTemplate = (subject, message, userName) => {
  */
 export const sendPaymentConfirmation = async (reservation) => {
   try {
+    const existingPaymentNotice = await Notification.findOne({
+      type: 'payment_confirmation',
+      'data.reservationId': reservation._id.toString(),
+      status: { $ne: 'failed' },
+    });
+
+    if (existingPaymentNotice) {
+      console.log(`[Payment Confirmation] Skipping duplicate for reservation ${reservation._id}`);
+      return;
+    }
+
     console.log(`[Payment Confirmation] Sending for reservation ${reservation._id}`);
     
     const resourceName = typeof reservation.resourceId === 'object' 
@@ -325,6 +336,17 @@ export const sendReservationReminder = async (reservation) => {
  */
 export const sendReservationConfirmation = async (reservation) => {
   try {
+    const existingConfirmation = await Notification.findOne({
+      type: 'booking_confirmation',
+      'data.reservationId': reservation._id.toString(),
+      status: { $ne: 'failed' },
+    });
+
+    if (existingConfirmation) {
+      console.log(`[Confirmation] Skipping duplicate for reservation ${reservation._id}`);
+      return;
+    }
+
     console.log(`[Confirmation] Sending confirmation for reservation ${reservation._id}`);
     
     const resourceName = typeof reservation.resourceId === 'object' 

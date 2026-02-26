@@ -15,6 +15,7 @@ import { fr } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { useDataSync } from '@/contexts/DataSyncContext';
+import { WeatherPreviewCard } from '@/components/reservations/WeatherPreviewCard';
 
 export const NewReservationPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -31,6 +32,9 @@ export const NewReservationPage: React.FC = () => {
   const [checkingAvailability, setCheckingAvailability] = useState(false);
   const [reservedHours, setReservedHours] = useState<number[]>([]);
   const [editingId, setEditingId] = useState<string | null>(searchParams.get('edit'));
+  const [weatherPreview, setWeatherPreview] = useState<any | null>(null);
+  const [isWeatherLoading, setIsWeatherLoading] = useState(false);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadResources = async () => {
@@ -68,6 +72,20 @@ export const NewReservationPage: React.FC = () => {
     loadResources();
     loadEditingReservation();
   }, [toast, editingId]);
+
+  // Initialize with today's weather on first load
+  useEffect(() => {
+    if (!editingId && !date && resources.length > 0) {
+      const today = new Date();
+      const nextHour = new Date(today);
+      nextHour.setHours(nextHour.getHours() + 1, 0, 0, 0);
+      const startTimeStr = `${nextHour.getHours().toString().padStart(2, '0')}:00`;
+      
+      setDate(today);
+      setStartTime(startTimeStr);
+      setEndTime(startTimeStr);
+    }
+  }, [resources.length, editingId]);
 
   // Fetch reserved hours when date changes
   const handleDateSelect = async (selectedDate: Date | undefined) => {
@@ -124,6 +142,66 @@ export const NewReservationPage: React.FC = () => {
 
   const resource = resources.find((r: any) => (r._id || r.id) === resourceId);
   const hours = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
+  const isBeyondForecastWindow = Boolean(
+    date && date.getTime() > Date.now() + 16 * 24 * 60 * 60 * 1000
+  );
+
+  useEffect(() => {
+    let isActive = true;
+    const timer = setTimeout(async () => {
+      if (!resourceId || !date || !startTime || !endTime) {
+        if (isActive) {
+          setWeatherPreview(null);
+          setWeatherError(null);
+        }
+        return;
+      }
+
+      const [sh, sm] = startTime.split(':').map(Number);
+      const [eh, em] = endTime.split(':').map(Number);
+      const startDateTime = new Date(date);
+      startDateTime.setHours(sh, sm, 0, 0);
+      const endDateTime = new Date(date);
+      endDateTime.setHours(eh, em, 0, 0);
+
+      if (endDateTime <= startDateTime) {
+        if (isActive) {
+          setWeatherPreview(null);
+          setWeatherError(null);
+        }
+        return;
+      }
+
+      try {
+        setIsWeatherLoading(true);
+        setWeatherError(null);
+        const response = await bookingsAPI.getRecommendationPreview({
+          resourceId,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
+        });
+        if (isActive) {
+          setWeatherPreview(response.recommendation);
+        }
+      } catch (error: any) {
+        if (isActive) {
+          console.error('[Weather Preview] Error:', error);
+          const errorMsg = error.message || 'Impossible de recuperer la meteo pour ce creneau.';
+          setWeatherError(errorMsg);
+          setWeatherPreview(null);
+        }
+      } finally {
+        if (isActive) {
+          setIsWeatherLoading(false);
+        }
+      }
+    }, 350);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timer);
+    };
+  }, [resourceId, date, startTime, endTime]);
 
   const calculatePrice = () => {
     if (!resource || !startTime || !endTime || !date) return 0;
@@ -257,6 +335,14 @@ export const NewReservationPage: React.FC = () => {
                     />
                   </PopoverContent>
                 </Popover>
+                <p className="text-xs text-muted-foreground">
+                  Previsions meteo disponibles jusqu'a 16 jours.
+                </p>
+                {isBeyondForecastWindow && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    La meteo s'affichera a partir de 16 jours avant la date choisie.
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -308,6 +394,11 @@ export const NewReservationPage: React.FC = () => {
               {resource && startTime && endTime && (
                 <div className="p-4 rounded-lg bg-muted text-center"><p className="text-sm text-muted-foreground">Total estimé</p><p className="text-3xl font-bold">{calculatePrice()} DH</p></div>
               )}
+              <WeatherPreviewCard
+                recommendation={weatherPreview}
+                isLoading={isWeatherLoading}
+                error={weatherError}
+              />
               <Button type="submit" className="w-full" disabled={isLoading || checkingAvailability}>
                 {(isLoading || checkingAvailability) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {checkingAvailability ? 'Vérification de la disponibilité...' : 'Confirmer la réservation'}

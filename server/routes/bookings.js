@@ -4,7 +4,7 @@ import Reservation from '../models/Reservation.js';
 import Resource from '../models/Resource.js';
 import ResourceAvailability from '../models/ResourceAvailability.js';
 import { authenticate } from '../middleware/auth.js';
-import { getReservationWeatherRecommendation } from '../utils/weatherService.js';
+import { getReservationWeatherRecommendation, getWeatherRecommendation } from '../utils/weatherService.js';
 import {
   sendReservationConfirmation,
   sendReservationCancellation,
@@ -142,6 +142,68 @@ router.get('/recommendations', authenticate, async (req, res) => {
     res.json({ recommendations });
   } catch (error) {
     console.error('Get weather recommendations error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// Preview weather recommendation before creating a reservation
+router.get('/recommendation-preview', authenticate, [
+  query('resourceId').isMongoId().withMessage('Valid resourceId required'),
+  query('startTime').isISO8601().withMessage('Valid startTime required'),
+  query('endTime').isISO8601().withMessage('Valid endTime required'),
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ message: 'Validation failed', errors: errors.array() });
+    }
+
+    const { resourceId, startTime, endTime } = req.query;
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+
+    if (end <= start) {
+      return res.status(400).json({ message: 'End time must be after start time' });
+    }
+
+    const resource = await Resource.findById(resourceId)
+      .populate('locationId', 'name address latitude longitude city timezone');
+
+    if (!resource) {
+      return res.status(404).json({ message: 'Resource not found' });
+    }
+
+    const latitude = resource.latitude ?? resource.locationId?.latitude ?? null;
+    const longitude = resource.longitude ?? resource.locationId?.longitude ?? null;
+
+    console.log(`[Weather Preview] Resource: ${resource.name}, Lat: ${latitude}, Lon: ${longitude}`);
+
+    if (latitude === null || longitude === null) {
+      console.error(`[Weather Preview] Missing coordinates for resource ${resourceId}:`, {
+        resourceLatitude: resource.latitude,
+        resourceLongitude: resource.longitude,
+        locationId: resource.locationId?._id,
+        locationLatitude: resource.locationId?.latitude,
+        locationLongitude: resource.locationId?.longitude,
+      });
+      return res.status(400).json({
+        message: 'Resource coordinates missing',
+        details: 'Please set coordinates for resource or its location',
+      });
+    }
+
+    const recommendation = await getWeatherRecommendation({
+      latitude,
+      longitude,
+      startTime,
+      endTime,
+    });
+
+    console.log(`[Weather Preview] Recommendation: status=${recommendation.status}, score=${recommendation.score}`);
+
+    res.json({ recommendation });
+  } catch (error) {
+    console.error('Preview weather recommendation error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
@@ -531,6 +593,15 @@ router.post('/:id/payment', authenticate, async (req, res) => {
     // Verify user owns this reservation
     if (reservation.userId._id.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    if (reservation.paymentStatus === 'paid' || reservation.status === 'paid') {
+      return res.json({
+        success: true,
+        message: 'Payment already processed',
+        paymentId: reservation.paymentId,
+        reservation: reservation,
+      });
     }
 
     // Verify amount matches
