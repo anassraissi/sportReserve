@@ -180,7 +180,7 @@ export const generateEmailTemplate = (subject, message, userName) => {
 export const sendPaymentConfirmation = async (reservation) => {
   try {
     const existingPaymentNotice = await Notification.findOne({
-      type: 'payment_confirmation',
+      type: 'payment_receipt',
       'data.reservationId': reservation._id.toString(),
       status: { $ne: 'failed' },
     });
@@ -252,7 +252,7 @@ export const sendPaymentConfirmation = async (reservation) => {
     
     await sendNotification({
       userId: userId,
-      type: 'payment_confirmation',
+      type: 'payment_receipt',
       title,
       message,
       channels: ['in_app', 'email'],

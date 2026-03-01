@@ -4,6 +4,7 @@ import { sendEmail, markNotificationAsSent, sendNotification, broadcastNotificat
 import User from '../models/User.js';
 import { getReservationWeatherRecommendation } from '../utils/weatherService.js';
 import { getRegionalWeatherSummary } from '../utils/regionWeatherService.js';
+import AIService from '../utils/aiService.js';
 
 const WEATHER_ALERT_LOOKAHEAD_DAYS = 7;
 const WEATHER_ALERT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -421,7 +422,43 @@ export const initializeScheduledJobs = (app) => {
   // Run immediately
   sendRegionalWeatherBroadcast();
 
+  // Generate intelligent AI reminders every 6 hours
+  setInterval(generateIntelligentReminders, 6 * 60 * 60 * 1000);
+  // Run immediately
+  generateIntelligentReminders();
+
   console.log('[Jobs] Scheduled jobs initialized');
+};
+
+/**
+ * Generate intelligent reminders with AI
+ */
+const generateIntelligentReminders = async () => {
+  try {
+    console.log('[AI Jobs] Generating intelligent reminders...');
+    
+    // Initialize AI service
+    const USE_GEMINI = process.env.GEMINI_API_KEY ? true : false;
+    if (!USE_GEMINI) {
+      console.log('[AI Jobs] AI not configured, skipping intelligent reminders');
+      return;
+    }
+
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const aiService = new AIService(genAI, model);
+
+    const result = await aiService.generateIntelligentReminders();
+    
+    if (result.success) {
+      console.log(`[AI Jobs] Generated ${result.remindersCreated} intelligent reminders`);
+    } else {
+      console.error('[AI Jobs] Failed to generate reminders:', result.error);
+    }
+  } catch (error) {
+    console.error('[AI Jobs] Error generating intelligent reminders:', error);
+  }
 };
 
 export default {

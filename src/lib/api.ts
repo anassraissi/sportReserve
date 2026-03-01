@@ -756,6 +756,98 @@ export const reviewsAPI = {
   },
 };
 
+// ===================================================
+// AI API
+export const aiAPI = {
+  // Natural language booking
+  parseBooking: async (message: string) => {
+    return apiRequest<{ success: boolean; parsed: any; message?: string }>(
+      '/ai/booking/parse',
+      {
+        method: 'POST',
+        body: JSON.stringify({ message }),
+      }
+    );
+  },
+
+  // Personalized recommendations with weather
+  getPersonalizedRecommendations: async (params?: { limit?: number; date?: string }) => {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) queryParams.append(key, String(value));
+      });
+    }
+    return apiRequest<{ success: boolean; recommendations: any[]; count: number }>(
+      `/ai/recommendations/personalized-weather?${queryParams}`
+    );
+  },
+
+  // Dynamic pricing
+  getDynamicPricing: async (resourceId: string, date: string, time: string) => {
+    return apiRequest<{ success: boolean; pricing: any }>(
+      `/ai/pricing/dynamic?resourceId=${resourceId}&date=${date}&time=${time}`
+    );
+  },
+
+  // Admin dashboard
+  getAdminDashboard: async () => {
+    return apiRequest<{
+      success: boolean;
+      overview: any;
+      topResources: any[];
+      suspiciousUsers: any[];
+      demandPredictions: any[];
+      aiInsights: any;
+      recommendations: any[];
+    }>('/ai/admin/dashboard');
+  },
+
+  // Suspicious behavior
+  detectSuspiciousBehavior: async (userId: string) => {
+    return apiRequest<{
+      success: boolean;
+      userId: string;
+      alerts: any[];
+      riskScore: number;
+      recommendation: string;
+    }>(`/ai/admin/suspicious-behavior?userId=${userId}`);
+  },
+
+  // Demand predictions
+  getDemandPredictions: async (params?: { resourceId?: string; days?: number }) => {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) queryParams.append(key, String(value));
+      });
+    }
+    return apiRequest<{ success: boolean; predictions: any[]; period: string }>(
+      `/ai/admin/demand-predictions?${queryParams}`
+    );
+  },
+
+  // Analytics
+  getAnalytics: async (days: number = 30) => {
+    return apiRequest<{
+      success: boolean;
+      period: string;
+      overview: any;
+      topSports: any[];
+      peakHours: any[];
+      insights: any[];
+    }>(`/ai/admin/analytics?days=${days}`);
+  },
+
+  // Create alert
+  createAlert: async (data: { userId: string; type: string; data: any }) => {
+    return apiRequest<{ success: boolean; notification: any }>('/ai/admin/alert', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 // Export default API object
 export default {
   auth: authAPI,
@@ -764,5 +856,6 @@ export default {
   media: mediaAPI,
   notifications: notificationsAPI,
   reviews: reviewsAPI,
+  ai: aiAPI,
 };
 

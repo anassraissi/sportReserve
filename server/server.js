@@ -109,6 +109,8 @@ import notificationRoutes from './routes/notifications.js';
 import reviewRoutes from './routes/reviews.js';
 import locationRoutes from './routes/locations.js';
 import weatherRoutes from './routes/weather.js';
+import aiRoutes from './routes/ai.js';
+import aiEnhancedRoutes from './routes/aiEnhanced.js';
 import { initializeScheduledJobs } from './jobs/scheduledJobs.js';
 
 app.use('/api/auth', authRoutes);
@@ -119,6 +121,8 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/locations', locationRoutes);
 app.use('/api/weather', weatherRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/ai', aiEnhancedRoutes); // Routes IA professionnelles
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

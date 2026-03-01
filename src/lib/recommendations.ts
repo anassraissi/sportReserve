@@ -222,9 +222,10 @@ export const scoreResourceForUser = (
 
   // Price range (estimate based on pattern)
   const estimatedBudget = pattern.totalSpent / Math.max(pattern.frequencyPerMonth, 1);
-  const pricePerSession = resource.pricePerHour * pattern.averageBookingDuration;
-  
-  if (pricePerSession <= estimatedBudget * 1.2) {
+  const unitPrice = resource.pricePerUnit ?? resource.basePrice ?? resource.pricePerHour ?? 0;
+  const durationHours = pattern.averageBookingDuration > 0 ? pattern.averageBookingDuration : 1;
+  const pricePerSession = unitPrice * durationHours;
+  if (estimatedBudget > 0 && pricePerSession > 0 && pricePerSession <= estimatedBudget * 1.2) {
     score += 20;
   }
 
@@ -250,8 +251,12 @@ export const getTrendingResources = (
   resources: any[],
   pattern: BookingPattern
 ): any[] => {
-  return resources
-    .filter(r => r.type === pattern.preferredResourceType)
+  const filteredResources = pattern.preferredResourceType === 'all'
+    ? resources
+    : resources.filter(r => r.type === pattern.preferredResourceType);
+  const candidates = filteredResources.length > 0 ? filteredResources : resources;
+
+  return candidates
     .sort((a, b) => {
       const scoreA = scoreResourceForUser(a, pattern, resources);
       const scoreB = scoreResourceForUser(b, pattern, resources);

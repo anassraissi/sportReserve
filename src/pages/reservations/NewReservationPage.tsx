@@ -35,12 +35,38 @@ export const NewReservationPage: React.FC = () => {
   const [weatherPreview, setWeatherPreview] = useState<any | null>(null);
   const [isWeatherLoading, setIsWeatherLoading] = useState(false);
   const [weatherError, setWeatherError] = useState<string | null>(null);
+  const typeParam = searchParams.get('type'); // terrain|salle|equipment
+  const cityParam = searchParams.get('city');
+
+  useEffect(() => {
+    if (editingId) return;
+    const startParam = searchParams.get('start');
+    const endParam = searchParams.get('end');
+    if (!startParam || !endParam) return;
+    const startDate = new Date(startParam);
+    const endDate = new Date(endParam);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return;
+    setDate(startDate);
+    setStartTime(format(startDate, 'HH:mm'));
+    setEndTime(format(endDate, 'HH:mm'));
+  }, [editingId, searchParams]);
 
   useEffect(() => {
     const loadResources = async () => {
       try {
         const response = await resourcesAPI.getAll({ status: 'active', page: 1, limit: 1000 });
-        setResources(response.resources || []);
+        let list = response.resources || [];
+
+        // Optional filters from AI assistant
+        if (typeParam) {
+          list = list.filter((r: any) => r.type === typeParam);
+        }
+        if (cityParam) {
+          const c = cityParam.toLowerCase();
+          list = list.filter((r: any) => String(r.city || '').toLowerCase().includes(c));
+        }
+
+        setResources(list);
       } catch (error: any) {
         toast({
           title: 'Erreur',
@@ -71,7 +97,7 @@ export const NewReservationPage: React.FC = () => {
     
     loadResources();
     loadEditingReservation();
-  }, [toast, editingId]);
+  }, [toast, editingId, typeParam, cityParam]);
 
   // Initialize with today's weather on first load
   useEffect(() => {
