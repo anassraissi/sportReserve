@@ -83,6 +83,7 @@ function getFallbackSuggestions(recentReservations) {
 const USE_GEMINI = process.env.GEMINI_API_KEY ? true : false;
 
 let genAI, model;
+let openai = null;
 let reviewAnalyzer, recommendationEngine, imageRecognition, predictiveAnalytics, voiceBooking;
 
 if (USE_GEMINI) {
@@ -96,6 +97,12 @@ if (USE_GEMINI) {
   recommendationEngine = new RecommendationEngine(genAI, model);
   predictiveAnalytics = new PredictiveAnalytics(genAI, model);
   voiceBooking = new VoiceBookingService(genAI, model);
+} else {
+  // OpenAI (PAID)
+  const OpenAI = (await import('openai')).default;
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
 }
 
 // GET /api/ai/models - List available models for your Gemini key
@@ -190,8 +197,21 @@ Prix: généralement entre 50 et 300 DH selon le type et la durée.`;
         const result = await model.generateContent(prompt);
         response = result.response.text();
         provider = 'gemini';
+      } else if (openai && process.env.OPENAI_API_KEY) {
+        // Use OpenAI (PAID)
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: message },
+          ],
+          max_tokens: 500,
+          temperature: 0.7,
+        });
+        response = completion.choices[0]?.message?.content || 
+          "Désolé, je n'ai pas pu générer une réponse.";
+        provider = 'openai';
       } else {
-        // No AI provider available
         throw new Error('No AI provider available');
       }
     } catch (aiError) {
@@ -333,6 +353,17 @@ Exemple: ["Terrain de tennis - 18h00", "Cours de yoga debutant", "Salle de fitne
       if (USE_GEMINI) {
         const result = await model.generateContent(prompt);
         const content = result.response.text() || '[]';
+        suggestions = JSON.parse(content);
+      } else if (openai && process.env.OPENAI_API_KEY) {
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'user', content: prompt }
+          ],
+          max_tokens: 150,
+          temperature: 0.8,
+        });
+        const content = completion.choices[0]?.message?.content || '[]';
         suggestions = JSON.parse(content);
       } else {
         throw new Error('No AI provider available');
@@ -726,24 +757,6 @@ router.get('/admin/dashboard', authenticate, async (req, res) => {
     // Check if user is admin
     if (req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Accès refusé' });
-    }
-
-    // Check Gemini and AI service status
-    if (!USE_GEMINI || !process.env.GEMINI_API_KEY) {
-      return res.status(503).json({
-        message: 'Service IA Gemini non configuré. Ajoutez GEMINI_API_KEY dans votre .env.'
-      });
-    }
-    if (!reviewAnalyzer || !recommendationEngine || !predictiveAnalytics || !voiceBooking) {
-      return res.status(503).json({
-        message: 'Un ou plusieurs services IA ne sont pas initialisés correctement.',
-        systems: {
-          reviewAnalyzer: reviewAnalyzer ? 'Active' : 'Inactive',
-          recommendations: recommendationEngine ? 'Active' : 'Inactive',
-          predictiveAnalytics: predictiveAnalytics ? 'Active' : 'Inactive',
-          voiceBooking: voiceBooking ? 'Active' : 'Inactive'
-        }
-      });
     }
 
     const dashboard = {

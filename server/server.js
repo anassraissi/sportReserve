@@ -16,18 +16,9 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const httpServer = createServer(app);
-
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:8080',
-];
-if (process.env.FRONTEND_URL) {
-  allowedOrigins.push(process.env.FRONTEND_URL);
-}
-
 const io = new Server(httpServer, {
   cors: {
-    origin: allowedOrigins,
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
   },
@@ -35,7 +26,7 @@ const io = new Server(httpServer, {
 
 // Middleware
 app.use(cors({
-  origin: allowedOrigins,
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
   credentials: true,
 }));
 app.use(express.json());
